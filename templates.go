@@ -55,6 +55,9 @@ const AllModelFuncTemp = `func All%s() ([]*%s, error) {
 	}`
 
 const QueryModelFuncTemp = `func Query%s(query string) ([]*%s, error) {
+		for k, v := range %sMap {
+			query = strings.Replace(query, k, v, -1)
+		}
 		rows, err := %s.Query("SELECT * FROM %s WHERE ?", query)
 		if err != nil {
 			return nil, err
@@ -94,6 +97,9 @@ const ModelRelationFuncTemp = `func (m *%s) %s() %sTo%s {
 				return list, nil
 			},
 			Filter: func(query string) ([]*%s, error) {
+				for k, v := range %sMap {
+					query = strings.Replace(query, k, v, -1)
+				}
 				rows, err := %s.Query("%s", *m.%s, query)
 				if err != nil {
 					return nil, err
@@ -182,4 +188,10 @@ const ModelFromRowsFuncTemp = `func %sFromRows(rows *sql.Rows) (*%s, error) {
 		)
 		%s
 		return New%s(%s), nil
+	}`
+
+const MapElemTemp = `"%s": "%s",`
+
+const QueryFieldMapTemp = `var %sMap = map[string]string {
+	%s
 	}`

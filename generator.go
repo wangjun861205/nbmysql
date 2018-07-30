@@ -20,6 +20,18 @@ func GenInitFunc(db Database) string {
 	return fmt.Sprintf(InitFuncTemp, db.Username, db.Password, db.Address, db.DatabaseName, db.ObjName)
 }
 
+func GenMapElemBlock(col Column) string {
+	return fmt.Sprintf(MapElemTemp, "@"+col.FieldName, col.ColumnName)
+}
+
+func GenQueryFieldMapBlock(tab Table) string {
+	elemList := make([]string, len(tab.Columns))
+	for i, col := range tab.Columns {
+		elemList[i] = GenMapElemBlock(col)
+	}
+	return fmt.Sprintf(QueryFieldMapTemp, tab.ModelName, strings.Join(elemList, "\n"))
+}
+
 func GenField(col Column) string {
 	return fmt.Sprintf(FieldTemp, col.FieldName, col.FieldType)
 }
@@ -56,7 +68,7 @@ func GenAllFunc(tab Table, db Database) string {
 }
 
 func GenQueryFunc(tab Table, db Database) string {
-	return fmt.Sprintf(QueryModelFuncTemp, tab.ModelName, tab.ModelName, db.ObjName, BackQuote(tab.TableName), tab.ModelName, tab.ModelName)
+	return fmt.Sprintf(QueryModelFuncTemp, tab.ModelName, tab.ModelName, tab.ModelName, db.ObjName, BackQuote(tab.TableName), tab.ModelName, tab.ModelName)
 }
 
 func GenManyToManyFunc(srcTab, dstTab, midTab Table, srcCol, dstCol, midLeftCol, midRightCol Column, db Database) string {
@@ -78,7 +90,7 @@ func GenManyToManyFunc(srcTab, dstTab, midTab Table, srcCol, dstCol, midLeftCol,
 	filterSql := allSql + " AND ?"
 	return fmt.Sprintf(ModelRelationFuncTemp, srcTab.ModelName, dstTab.ModelName, srcTab.ModelName, dstTab.ModelName, srcTab.ModelName,
 		dstTab.ModelName, dstTab.ModelName, db.ObjName, allSql, srcCol.FieldName, dstTab.ModelName, dstTab.ModelName, dstTab.ModelName,
-		db.ObjName, filterSql, srcCol.FieldName, dstTab.ModelName, dstTab.ModelName)
+		dstTab.ModelName, db.ObjName, filterSql, srcCol.FieldName, dstTab.ModelName, dstTab.ModelName)
 }
 
 func GenForeignKeyFunc(srcTab, dstTab Table, srcCol, dstCol Column, db Database) string {
@@ -88,7 +100,7 @@ func GenForeignKeyFunc(srcTab, dstTab Table, srcCol, dstCol Column, db Database)
 	filterSql := allSql + " AND ?"
 	return fmt.Sprintf(ModelRelationFuncTemp, srcTab.ModelName, dstTab.ModelName, srcTab.ModelName, dstTab.ModelName, srcTab.ModelName,
 		dstTab.ModelName, dstTab.ModelName, db.ObjName, allSql, srcCol.FieldName, dstTab.ModelName, dstTab.ModelName, dstTab.ModelName,
-		db.ObjName, filterSql, srcCol.FieldName, dstTab.ModelName, dstTab.ModelName)
+		dstTab.ModelName, db.ObjName, filterSql, srcCol.FieldName, dstTab.ModelName, dstTab.ModelName)
 }
 
 func GenCheckStringBlock(col Column) string {
@@ -182,6 +194,7 @@ func Gen(db Database, outName string) error {
 	buf.WriteString(GenDb(db) + "\n")
 	buf.WriteString(GenInitFunc(db) + "\n")
 	for _, tab := range db.Tables {
+		buf.WriteString(GenQueryFieldMapBlock(tab) + "\n")
 		buf.WriteString(GenModel(tab) + "\n")
 		for _, fk := range tab.ForeignKeys {
 			buf.WriteString(GenModelRelation(tab, *fk.DstTab) + "\n")

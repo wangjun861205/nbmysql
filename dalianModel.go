@@ -17,6 +17,28 @@ func init() {
 	BkDalian = db
 }
 
+var BookMap = map[string]string{
+	"@Id":           "id",
+	"@Title":        "title",
+	"@Price":        "price",
+	"@Author":       "author",
+	"@Publisher":    "publisher",
+	"@Series":       "series",
+	"@Isbn":         "isbn",
+	"@PublishDate":  "publish_date",
+	"@Binding":      "binding",
+	"@Format":       "format",
+	"@Pages":        "pages",
+	"@WordCount":    "word_count",
+	"@ContentIntro": "content_intro",
+	"@AuthorIntro":  "author_intro",
+	"@Menu":         "menu",
+	"@Volume":       "volume",
+	"@Category":     "category",
+	"@Count":        "count",
+	"@Code":         "code",
+}
+
 type Book struct {
 	Id           *int64
 	Title        *string
@@ -38,6 +60,7 @@ type Book struct {
 	Count        *int64
 	Code         *string
 }
+
 type BookToTags struct {
 	All    func() ([]*Tags, error)
 	Filter func(query string) ([]*Tags, error)
@@ -61,6 +84,9 @@ func (m *Book) Tags() BookToTags {
 			return list, nil
 		},
 		Filter: func(query string) ([]*Tags, error) {
+			for k, v := range TagsMap {
+				query = strings.Replace(query, k, v, -1)
+			}
 			rows, err := BkDalian.Query("SELECT `tags`.* FROM `book` JOIN `book__tags` ON `book`.`isbn`=`book__tags`.`book__isbn` JOIN `tags` on `book__tags`.`tags__id` = `tags`.`id` WHERE `book`.`isbn` = ? AND ?", *m.Isbn, query)
 			if err != nil {
 				return nil, err
@@ -97,6 +123,9 @@ func AllBook() ([]*Book, error) {
 	return list, nil
 }
 func QueryBook(query string) ([]*Book, error) {
+	for k, v := range BookMap {
+		query = strings.Replace(query, k, v, -1)
+	}
 	rows, err := BkDalian.Query("SELECT * FROM `book` WHERE ?", query)
 	if err != nil {
 		return nil, err
@@ -393,6 +422,11 @@ func BookFromRows(rows *sql.Rows) (*Book, error) {
 	return NewBook(id, title, price, author, publisher, series, isbn, publishDate, binding, format, pages, wordCount, contentIntro, authorIntro, menu, volume, category, count, code), nil
 }
 
+var TagsMap = map[string]string{
+	"@Id":  "id",
+	"@Tag": "tag",
+}
+
 type Tags struct {
 	Id  *int64
 	Tag *string
@@ -420,6 +454,9 @@ func (m *Tags) Book() TagsToBook {
 			return list, nil
 		},
 		Filter: func(query string) ([]*Book, error) {
+			for k, v := range BookMap {
+				query = strings.Replace(query, k, v, -1)
+			}
 			rows, err := BkDalian.Query("SELECT `book`.* FROM `tags` JOIN `book__tags` ON `tags`.`id`=`book__tags`.`tags__id` JOIN `book` on `book__tags`.`book__isbn` = `book`.`isbn` WHERE `tags`.`id` = ? AND ?", *m.Id, query)
 			if err != nil {
 				return nil, err
@@ -456,6 +493,9 @@ func AllTags() ([]*Tags, error) {
 	return list, nil
 }
 func QueryTags(query string) ([]*Tags, error) {
+	for k, v := range TagsMap {
+		query = strings.Replace(query, k, v, -1)
+	}
 	rows, err := BkDalian.Query("SELECT * FROM `tags` WHERE ?", query)
 	if err != nil {
 		return nil, err
