@@ -1,0 +1,36 @@
+package nbmysql;
+
+@Name = "bk_dalian";
+@Address = "127.0.0.1:12345";
+@Username = "wangjun";
+@Password = "Wt20110523";
+
+Table book {
+    Column  id INT AUTO_INCREMENT NOT NULL ,
+    Column  title VARCHAR(255) NOT NULL,
+    Column  price INT,
+    Column  author VARCHAR(255),
+    Column  publisher VARCHAR(255),
+    Column  series VARCHAR(255),
+    Column  isbn VARCHAR(255),
+    Column  publish_date DATE,
+    Column  binding VARCHAR(255),
+    Column  format VARCHAR(255),
+    Column  pages INT,
+    Column  word_count INT,
+    Column  content_intro TEXT,
+    Column  author_intro TEXT,
+    Column  menu TEXT,
+    Column  volume INT,
+    Column  category VARCHAR(255),
+    Column  count INT NOT NULL DEFAULT "1",
+    Column  code VARCHAR(255),
+    ManyToMany tags isbn id,
+    PRIMARY KEY id,
+}; 
+
+Table tags {
+    Column   id INT(11) NOT NULL AUTO_INCREMENT,
+    Column  tag VARCHAR(255),
+    PRIMARY KEY id,
+};
