@@ -15,7 +15,7 @@ func main() {
 	var path string
 	var createTab bool
 	var rootPath string
-	flag.StringVar(&path, "p", "./", "specific parse root path")
+	flag.StringVar(&path, "d", "./", "specific parse root path")
 	flag.BoolVar(&createTab, "c", false, "if create all table")
 	flag.Parse()
 	if filepath.IsAbs(path) {

@@ -79,7 +79,7 @@ const ManyToManyFilterSQLTemp = `SELECT %s.* FROM %s JOIN %s ON %s.%s=%s.%s JOIN
 const ForeignKeyAllSQLTemp = `SELECT %s.* FROM %s JOIN %s ON %s.%s=%s.%s where %s.%s = ?`
 const ForeignKeyFilterSQLTemp = `SELECT %s.* FROM %s JOIN %s ON %s.%s=%s.%s where %s.%s = ? AND ?`
 
-const ModelRelationFuncTemp = `func (m *%s) %s() %sTo%s {
+const ModelRelationFuncTemp = `func (m *%s) %sBy%s() %sTo%s {
 		return %sTo%s{
 			All: func() ([]*%s, error) {
 				rows, err := %s.Query("%s", *m.%s)

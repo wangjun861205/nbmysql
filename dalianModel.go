@@ -60,13 +60,12 @@ type Book struct {
 	Count        *int64
 	Code         *string
 }
-
 type BookToTags struct {
 	All    func() ([]*Tags, error)
 	Filter func(query string) ([]*Tags, error)
 }
 
-func (m *Book) Tags() BookToTags {
+func (m *Book) TagsByIsbn() BookToTags {
 	return BookToTags{
 		All: func() ([]*Tags, error) {
 			rows, err := BkDalian.Query("SELECT `tags`.* FROM `book` JOIN `book__tags` ON `book`.`isbn`=`book__tags`.`book__isbn` JOIN `tags` on `book__tags`.`tags__id` = `tags`.`id` WHERE `book`.`isbn` = ?", *m.Isbn)
@@ -436,7 +435,7 @@ type TagsToBook struct {
 	Filter func(query string) ([]*Book, error)
 }
 
-func (m *Tags) Book() TagsToBook {
+func (m *Tags) BookById() TagsToBook {
 	return TagsToBook{
 		All: func() ([]*Book, error) {
 			rows, err := BkDalian.Query("SELECT `book`.* FROM `tags` JOIN `book__tags` ON `tags`.`id`=`book__tags`.`tags__id` JOIN `book` on `book__tags`.`book__isbn` = `book`.`isbn` WHERE `tags`.`id` = ?", *m.Id)

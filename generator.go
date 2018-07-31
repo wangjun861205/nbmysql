@@ -88,7 +88,7 @@ func GenManyToManyFunc(srcTab, dstTab, midTab Table, srcCol, dstCol, midLeftCol,
 		BackQuote(srcTab.TableName),
 		BackQuote(srcCol.ColumnName))
 	filterSql := allSql + " AND ?"
-	return fmt.Sprintf(ModelRelationFuncTemp, srcTab.ModelName, dstTab.ModelName, srcTab.ModelName, dstTab.ModelName, srcTab.ModelName,
+	return fmt.Sprintf(ModelRelationFuncTemp, srcTab.ModelName, dstTab.ModelName, srcCol.FieldName, srcTab.ModelName, dstTab.ModelName, srcTab.ModelName,
 		dstTab.ModelName, dstTab.ModelName, db.ObjName, allSql, srcCol.FieldName, dstTab.ModelName, dstTab.ModelName, dstTab.ModelName,
 		dstTab.ModelName, db.ObjName, filterSql, srcCol.FieldName, dstTab.ModelName, dstTab.ModelName)
 }
@@ -98,7 +98,7 @@ func GenForeignKeyFunc(srcTab, dstTab Table, srcCol, dstCol Column, db Database)
 		BackQuote(srcTab.TableName), BackQuote(srcCol.ColumnName), BackQuote(dstTab.TableName), BackQuote(dstCol.ColumnName), BackQuote(srcTab.TableName),
 		BackQuote(srcCol.ColumnName))
 	filterSql := allSql + " AND ?"
-	return fmt.Sprintf(ModelRelationFuncTemp, srcTab.ModelName, dstTab.ModelName, srcTab.ModelName, dstTab.ModelName, srcTab.ModelName,
+	return fmt.Sprintf(ModelRelationFuncTemp, srcTab.ModelName, dstTab.ModelName, srcCol.FieldName, srcTab.ModelName, dstTab.ModelName, srcTab.ModelName,
 		dstTab.ModelName, dstTab.ModelName, db.ObjName, allSql, srcCol.FieldName, dstTab.ModelName, dstTab.ModelName, dstTab.ModelName,
 		dstTab.ModelName, db.ObjName, filterSql, srcCol.FieldName, dstTab.ModelName, dstTab.ModelName)
 }
