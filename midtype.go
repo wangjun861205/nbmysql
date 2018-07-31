@@ -13,11 +13,16 @@ type Int struct {
 func (i *Int) Scan(v interface{}) error {
 	if v != nil {
 		i.IsNull = false
-		i64, err := strconv.ParseInt(string(v.([]byte)), 10, 64)
-		if err != nil {
-			return err
+		switch val := v.(type) {
+		case int64:
+			i.Value = val
+		case []byte:
+			i64, err := strconv.ParseInt(string(val), 10, 64)
+			if err != nil {
+				return err
+			}
+			i.Value = i64
 		}
-		i.Value = i64
 		return nil
 	}
 	i.IsNull = true
@@ -32,11 +37,16 @@ type Float struct {
 func (f *Float) Scan(v interface{}) error {
 	if v != nil {
 		f.IsNull = false
-		f64, err := strconv.ParseFloat(string(v.([]byte)), 64)
-		if err != nil {
-			return err
+		switch val := v.(type) {
+		case float64:
+			f.Value = val
+		case []byte:
+			f64, err := strconv.ParseFloat(string(val), 64)
+			if err != nil {
+				return err
+			}
+			f.Value = f64
 		}
-		f.Value = f64
 		return nil
 	}
 	f.IsNull = true
@@ -52,11 +62,16 @@ type Bool struct {
 func (b *Bool) Scan(v interface{}) error {
 	if v != nil {
 		b.IsNull = false
-		bl, err := strconv.ParseBool(string(v.([]byte)))
-		if err != nil {
-			return err
+		switch val := v.(type) {
+		case bool:
+			b.Value = val
+		case int64:
+			bl, err := strconv.ParseBool(strconv.FormatInt(val, 64))
+			if err != nil {
+				return err
+			}
+			b.Value = bl
 		}
-		b.Value = bl
 		return nil
 	}
 	b.IsNull = true
@@ -88,7 +103,10 @@ func (t *Time) Scan(v interface{}) error {
 		t.IsNull = false
 		tv, err := time.Parse("2006-01-02 15:04:05", string(v.([]byte)))
 		if err != nil {
-			return err
+			tv, err = time.Parse("2006-01-02", string(v.([]byte)))
+			if err != nil {
+				return err
+			}
 		}
 		t.Value = tv
 		return nil

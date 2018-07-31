@@ -42,3 +42,12 @@ func ToLocal(name string) string {
 func RmParenthesis(s string) string {
 	return removeParenthesisRe.ReplaceAllString(s, "")
 }
+
+func getColumn(colName string, tab *Table) *Column {
+	for i, col := range tab.Columns {
+		if col.ColumnName == colName {
+			return &tab.Columns[i]
+		}
+	}
+	return nil
+}

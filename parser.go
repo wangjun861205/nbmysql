@@ -2,9 +2,11 @@ package nbmysql
 
 import (
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"regexp"
+	"strings"
 
 	_ "github.com/go-sql-driver/mysql"
 )
@@ -80,6 +82,7 @@ var UniqueRe = regexp.MustCompile(`UNIQUE`)
 var ForeignKeyRe = regexp.MustCompile(`ForeignKey\s+(\w+)\s+(\w+)\s+(\w+),`)
 var ManyToManyRe = regexp.MustCompile(`ManyToMany\s+(\w+)\s+(\w+)\s+(\w+),`)
 var PrimaryKeyRe = regexp.MustCompile(`PRIMARY KEY\s+(\w+),`)
+var UniqueKeyRe = regexp.MustCompile(`UNIQUE KEY\s+\((.*?)\),`)
 
 func findPackage(s string) (string, error) {
 	pkg := PackageRe.FindStringSubmatch(s)
@@ -285,6 +288,11 @@ func parseTable(t []string, db Database) (Table, error) {
 			DstColName: mtm[3],
 		}
 	}
+	uniqueKeys, err := parseUniqueKeys(t[2], &table)
+	if err != nil {
+		return table, err
+	}
+	table.UniqueKeys = uniqueKeys
 	return table, nil
 }
 
@@ -376,7 +384,7 @@ func parseManyToMany(info ManyToManyInfo, tab *Table, db *Database) error {
 	midTab.AutoIncrement = &midTab.Columns[0]
 	midTab.PrimaryKey = &midTab.Columns[0]
 	midTab.UniqueKeys = []UniqueKey{
-		UniqueKey{midTab.Columns[1].ColumnName, midTab.Columns[2].ColumnName},
+		UniqueKey{&midTab.Columns[1], &midTab.Columns[2]},
 	}
 	err := db.CreateTableIfNotExists(midTab)
 	if err != nil {
@@ -404,4 +412,22 @@ func parseManyToMany(info ManyToManyInfo, tab *Table, db *Database) error {
 	tab.ManyToManys = append(tab.ManyToManys, mtm)
 	dstTab.ManyToManys = append(dstTab.ManyToManys, dstMtm)
 	return nil
+}
+
+func parseUniqueKeys(s string, tab *Table) ([]UniqueKey, error) {
+	l := UniqueKeyRe.FindAllStringSubmatch(s, -1)
+	ukList := make([]UniqueKey, len(l))
+	for i, uk := range l {
+		colList := strings.Split(uk[1], ",")
+		uniqueKey := make(UniqueKey, len(colList))
+		for j, colName := range colList {
+			col := getColumn(strings.Trim(colName, " "), tab)
+			if col == nil {
+				return nil, fmt.Errorf("unique key %s not exists", strings.Trim(colName, " "))
+			}
+			uniqueKey[j] = col
+		}
+		ukList[i] = uniqueKey
+	}
+	return ukList, nil
 }

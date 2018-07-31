@@ -92,7 +92,7 @@ const ManyToManyInsertTemp = `Insert: func(%s *%s) error {
 				colList := make([]string, 0, 32)
 				valList := make([]string, 0, 32)
 				%s
-				res, err := tx.Exec("%s", strings.Join(colList, ", "), strings.Join(valList, ", "))
+				res, err := tx.Exec(fmt.Sprintf("%s", strings.Join(colList, ", "), strings.Join(valList, ", ")))
 				if err != nil {
 					tx.Rollback()
 					return err

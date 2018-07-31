@@ -6,7 +6,8 @@ import (
 	"strings"
 )
 
-type UniqueKey []string
+// type UniqueKey []string
+type UniqueKey []*Column
 
 type Column struct {
 	FieldName     string
@@ -75,9 +76,13 @@ func (db *Database) CreateTableIfNotExists(tab Table) error {
 	for _, uni := range tab.UniqueKeys {
 		bqList := make([]string, len(uni))
 		for i, _ := range uni {
-			bqList[i] = BackQuote(string(uni[i]))
+			bqList[i] = BackQuote(string(uni[i].ColumnName))
 		}
-		uniqueList = append(uniqueList, fmt.Sprintf("UNIQUE KEY `%s_unique` (%s)", strings.Join(uni, "_"), strings.Join(bqList, ", ")))
+		ukColList := make([]string, len(uni))
+		for i, col := range uni {
+			ukColList[i] = col.ColumnName
+		}
+		uniqueList = append(uniqueList, fmt.Sprintf("UNIQUE KEY `%s_unique` (%s)", strings.Join(ukColList, "_"), strings.Join(bqList, ", ")))
 	}
 	var uniqueClause string
 	if len(uniqueList) > 0 {
