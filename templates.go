@@ -30,7 +30,7 @@ const ModelRelationTemp = `type %sTo%s struct {
 		Filter func(query string) ([]*%s, error)
 	}`
 
-const FuncArgTemp = `%s *%s`
+const FuncArgTemp = `%s%s *%s`
 const FuncArgNameTemp = `%s, `
 
 const NewModelFuncTemp = `func New%s(%s) *%s {

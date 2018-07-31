@@ -48,15 +48,15 @@ func GenModelRelation(srcTab, dstTab Table) string {
 	return fmt.Sprintf(ModelRelationTemp, srcTab.ModelName, dstTab.ModelName, dstTab.ModelName, dstTab.ModelName)
 }
 
-func GenNewFuncArg(col Column) string {
-	return fmt.Sprintf(FuncArgTemp, col.ArgName, col.FieldType)
+func GenNewFuncArg(col Column, tab Table) string {
+	return fmt.Sprintf(FuncArgTemp, tab.ArgName, col.FieldName, col.FieldType)
 }
 
 func GenNewFunc(tab Table) string {
 	argList := make([]string, len(tab.Columns))
 	argNameList := make([]string, len(tab.Columns))
 	for i, col := range tab.Columns {
-		argList[i] = GenNewFuncArg(col)
+		argList[i] = GenNewFuncArg(col, tab)
 		argNameList[i] = col.ArgName
 	}
 	return fmt.Sprintf(NewModelFuncTemp, tab.ModelName, strings.Join(argList, ", "), tab.ModelName, tab.ArgName, tab.ModelName,
