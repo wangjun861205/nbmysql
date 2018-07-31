@@ -1,6 +1,9 @@
 package nbmysql
 
-import "time"
+import (
+	"strconv"
+	"time"
+)
 
 type Int struct {
 	Value  int64
@@ -10,7 +13,11 @@ type Int struct {
 func (i *Int) Scan(v interface{}) error {
 	if v != nil {
 		i.IsNull = false
-		i.Value = v.(int64)
+		i64, err := strconv.ParseInt(string(v.([]byte)), 10, 64)
+		if err != nil {
+			return err
+		}
+		i.Value = i64
 		return nil
 	}
 	i.IsNull = true
@@ -25,7 +32,11 @@ type Float struct {
 func (f *Float) Scan(v interface{}) error {
 	if v != nil {
 		f.IsNull = false
-		f.Value = v.(float64)
+		f64, err := strconv.ParseFloat(string(v.([]byte)), 64)
+		if err != nil {
+			return err
+		}
+		f.Value = f64
 		return nil
 	}
 	f.IsNull = true
@@ -41,7 +52,11 @@ type Bool struct {
 func (b *Bool) Scan(v interface{}) error {
 	if v != nil {
 		b.IsNull = false
-		b.Value = v.(bool)
+		bl, err := strconv.ParseBool(string(v.([]byte)))
+		if err != nil {
+			return err
+		}
+		b.Value = bl
 		return nil
 	}
 	b.IsNull = true
@@ -57,6 +72,7 @@ func (s *String) Scan(v interface{}) error {
 	if v != nil {
 		s.IsNull = false
 		s.Value = string(v.([]byte))
+		return nil
 	}
 	s.IsNull = true
 	return nil
@@ -70,7 +86,11 @@ type Time struct {
 func (t *Time) Scan(v interface{}) error {
 	if v != nil {
 		t.IsNull = false
-		t.Value = v.(time.Time)
+		tv, err := time.Parse("2006-01-02 15:04:05", string(v.([]byte)))
+		if err != nil {
+			return err
+		}
+		t.Value = tv
 		return nil
 	}
 	t.IsNull = true

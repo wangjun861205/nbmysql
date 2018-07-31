@@ -79,8 +79,12 @@ func (db *Database) CreateTableIfNotExists(tab Table) error {
 		}
 		uniqueList = append(uniqueList, fmt.Sprintf("UNIQUE KEY `%s_unique` (%s)", strings.Join(uni, "_"), strings.Join(bqList, ", ")))
 	}
-	stmt := fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s (%s, PRIMARY KEY (%s), %s)", BackQuote(tab.TableName), strings.Join(colList, ", "),
-		BackQuote(tab.PrimaryKey.ColumnName), strings.Join(uniqueList, ", "))
+	var uniqueClause string
+	if len(uniqueList) > 0 {
+		uniqueClause = ", " + strings.Join(uniqueList, ", ")
+	}
+	stmt := fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s (%s, PRIMARY KEY (%s)%s)", BackQuote(tab.TableName), strings.Join(colList, ", "),
+		BackQuote(tab.PrimaryKey.ColumnName), uniqueClause)
 	_, err = conn.Exec(stmt)
 	return err
 }

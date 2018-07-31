@@ -21,7 +21,7 @@ func GenInitFunc(db Database) string {
 }
 
 func GenMapElemBlock(col Column) string {
-	return fmt.Sprintf(MapElemTemp, "@"+col.FieldName, col.ColumnName)
+	return fmt.Sprintf(MapElemTemp, "@"+col.FieldName, BackQuote(col.ColumnName))
 }
 
 func GenQueryFieldMapBlock(tab Table) string {
@@ -45,11 +45,15 @@ func GenModel(tab Table) string {
 }
 
 func GenModelRelation(srcTab, dstTab Table) string {
-	return fmt.Sprintf(ModelRelationTemp, srcTab.ModelName, dstTab.ModelName, dstTab.ModelName, dstTab.ModelName)
+	return fmt.Sprintf(ModelRelationTemp, srcTab.ModelName, dstTab.ModelName, dstTab.ModelName, dstTab.ModelName, dstTab.ArgName, dstTab.ModelName)
 }
 
 func GenNewFuncArg(col Column, tab Table) string {
 	return fmt.Sprintf(FuncArgTemp, tab.ArgName, col.FieldName, col.FieldType)
+}
+
+func GenNewFuncArgName(col Column, tab Table) string {
+	return fmt.Sprintf(FuncArgNameTemp, tab.ArgName, col.FieldName)
 }
 
 func GenNewFunc(tab Table) string {
@@ -57,7 +61,7 @@ func GenNewFunc(tab Table) string {
 	argNameList := make([]string, len(tab.Columns))
 	for i, col := range tab.Columns {
 		argList[i] = GenNewFuncArg(col, tab)
-		argNameList[i] = col.ArgName
+		argNameList[i] = GenNewFuncArgName(col, tab)
 	}
 	return fmt.Sprintf(NewModelFuncTemp, tab.ModelName, strings.Join(argList, ", "), tab.ModelName, tab.ArgName, tab.ModelName,
 		strings.Join(argNameList, ", "), tab.ArgName)
@@ -69,6 +73,49 @@ func GenAllFunc(tab Table, db Database) string {
 
 func GenQueryFunc(tab Table, db Database) string {
 	return fmt.Sprintf(QueryModelFuncTemp, tab.ModelName, tab.ModelName, tab.ModelName, db.ObjName, BackQuote(tab.TableName), tab.ModelName, tab.ModelName)
+}
+
+func GenManyToManyInsertFunc(srcTab, dstTab, midTab Table, srcCol, dstCol, midLeftCol, midRightCol Column, db Database) string {
+	list := make([]string, len(dstTab.Columns))
+	for i, col := range dstTab.Columns {
+		switch col.FieldType {
+		case "string":
+			list[i] = GenCheckStringBlock(col, dstTab.ArgName)
+		case "int64":
+			list[i] = GenCheckIntBlock(col, dstTab.ArgName)
+		case "float64":
+			list[i] = GenCheckFloatBlock(col, dstTab.ArgName)
+		case "bool":
+			list[i] = GenCheckBoolBlock(col, dstTab.ArgName)
+		case "time.Time":
+			list[i] = GenCheckTimeBlock(col, dstTab.ArgName)
+		}
+	}
+	insertSQL := fmt.Sprintf(InsertSQLTemp, BackQuote(dstTab.TableName))
+	insertMiddleTableSQL := fmt.Sprintf(InsertMiddleTableSQLTemp, BackQuote(midTab.TableName), BackQuote(midLeftCol.ColumnName), BackQuote(midRightCol.ColumnName))
+	return fmt.Sprintf(ManyToManyInsertTemp, dstTab.ArgName, dstTab.ModelName, db.ObjName, strings.Join(list, "\n"), insertSQL,
+		dstTab.ArgName, dstTab.AutoIncrement.FieldName, insertMiddleTableSQL, srcCol.FieldName, dstTab.ArgName, dstCol.FieldName)
+}
+
+func GenForeignKeyInsertFunc(srcTab, dstTab Table, srcCol, dstCol Column, db Database) string {
+	list := make([]string, len(dstTab.Columns))
+	for i, col := range dstTab.Columns {
+		switch col.FieldType {
+		case "string":
+			list[i] = GenCheckStringBlock(col, dstTab.ArgName)
+		case "int64":
+			list[i] = GenCheckIntBlock(col, dstTab.ArgName)
+		case "float64":
+			list[i] = GenCheckFloatBlock(col, dstTab.ArgName)
+		case "bool":
+			list[i] = GenCheckBoolBlock(col, dstTab.ArgName)
+		case "time.Time":
+			list[i] = GenCheckTimeBlock(col, dstTab.ArgName)
+		}
+	}
+	insertSQL := fmt.Sprintf(InsertSQLTemp, BackQuote(dstTab.TableName))
+	return fmt.Sprintf(ForeignKeyInsertTemp, dstTab.ArgName, dstTab.ModelName, db.ObjName, strings.Join(list, "\n"), insertSQL,
+		dstTab.ArgName, dstTab.AutoIncrement.FieldName)
 }
 
 func GenManyToManyFunc(srcTab, dstTab, midTab Table, srcCol, dstCol, midLeftCol, midRightCol Column, db Database) string {
@@ -88,9 +135,10 @@ func GenManyToManyFunc(srcTab, dstTab, midTab Table, srcCol, dstCol, midLeftCol,
 		BackQuote(srcTab.TableName),
 		BackQuote(srcCol.ColumnName))
 	filterSql := allSql + " AND ?"
+	insertFunc := GenManyToManyInsertFunc(srcTab, dstTab, midTab, srcCol, dstCol, midLeftCol, midRightCol, db)
 	return fmt.Sprintf(ModelRelationFuncTemp, srcTab.ModelName, dstTab.ModelName, srcCol.FieldName, srcTab.ModelName, dstTab.ModelName, srcTab.ModelName,
 		dstTab.ModelName, dstTab.ModelName, db.ObjName, allSql, srcCol.FieldName, dstTab.ModelName, dstTab.ModelName, dstTab.ModelName,
-		dstTab.ModelName, db.ObjName, filterSql, srcCol.FieldName, dstTab.ModelName, dstTab.ModelName)
+		dstTab.ModelName, db.ObjName, filterSql, srcCol.FieldName, dstTab.ModelName, dstTab.ModelName, insertFunc)
 }
 
 func GenForeignKeyFunc(srcTab, dstTab Table, srcCol, dstCol Column, db Database) string {
@@ -98,29 +146,34 @@ func GenForeignKeyFunc(srcTab, dstTab Table, srcCol, dstCol Column, db Database)
 		BackQuote(srcTab.TableName), BackQuote(srcCol.ColumnName), BackQuote(dstTab.TableName), BackQuote(dstCol.ColumnName), BackQuote(srcTab.TableName),
 		BackQuote(srcCol.ColumnName))
 	filterSql := allSql + " AND ?"
+	insertFunc := GenForeignKeyInsertFunc(srcTab, dstTab, srcCol, dstCol, db)
 	return fmt.Sprintf(ModelRelationFuncTemp, srcTab.ModelName, dstTab.ModelName, srcCol.FieldName, srcTab.ModelName, dstTab.ModelName, srcTab.ModelName,
 		dstTab.ModelName, dstTab.ModelName, db.ObjName, allSql, srcCol.FieldName, dstTab.ModelName, dstTab.ModelName, dstTab.ModelName,
-		dstTab.ModelName, db.ObjName, filterSql, srcCol.FieldName, dstTab.ModelName, dstTab.ModelName)
+		dstTab.ModelName, db.ObjName, filterSql, srcCol.FieldName, dstTab.ModelName, dstTab.ModelName, insertFunc)
 }
 
-func GenCheckStringBlock(col Column) string {
-	return fmt.Sprintf(ModelCheckStringBlockTemp, col.FieldName, col.ColumnName, col.FieldName)
+func GenCheckStringBlock(col Column, localModelName string) string {
+	return fmt.Sprintf(ModelCheckStringBlockTemp, localModelName, col.FieldName, BackQuote(col.ColumnName), localModelName, col.FieldName)
 }
 
-func GenCheckIntBlock(col Column) string {
-	return fmt.Sprintf(ModelCheckIntBlockTemp, col.FieldName, col.ColumnName, col.FieldName)
+func GenCheckIntBlock(col Column, localModelName string) string {
+	return fmt.Sprintf(ModelCheckIntBlockTemp, localModelName, col.FieldName, BackQuote(col.ColumnName), localModelName, col.FieldName)
 }
 
-func GenCheckFloatBlock(col Column) string {
-	return fmt.Sprintf(ModelCheckFloatBlockTemp, col.FieldName, col.ColumnName, col.FieldName)
+func GenCheckFloatBlock(col Column, localModelName string) string {
+	return fmt.Sprintf(ModelCheckFloatBlockTemp, localModelName, col.FieldName, BackQuote(col.ColumnName), localModelName, col.FieldName)
 }
 
-func GenCheckTimeBlock(col Column) string {
-	return fmt.Sprintf(ModelCheckTimeBlockTemp, col.FieldName, col.ColumnName, col.FieldName)
+func GenCheckTimeBlock(col Column, localModelName string) string {
+	return fmt.Sprintf(ModelCheckTimeBlockTemp, localModelName, col.FieldName, BackQuote(col.ColumnName), localModelName, col.FieldName)
 }
 
-func GenCheckBoolBlock(col Column) string {
-	return fmt.Sprintf(ModelCheckBoolBlockTemp, col.FieldName, col.ColumnName, col.FieldName)
+func GenCheckBoolBlock(col Column, localModelName string) string {
+	return fmt.Sprintf(ModelCheckBoolBlockTemp, localModelName, col.FieldName, BackQuote(col.ColumnName), col.FieldName, localModelName)
+}
+
+func GenInsertSQL(tab Table) string {
+	return fmt.Sprintf(InsertSQLTemp, BackQuote(tab.TableName))
 }
 
 func GenInsertFunc(tab Table, db Database) string {
@@ -128,38 +181,61 @@ func GenInsertFunc(tab Table, db Database) string {
 	for i, col := range tab.Columns {
 		switch col.FieldType {
 		case "string":
-			list[i] = GenCheckStringBlock(col)
+			list[i] = GenCheckStringBlock(col, "m")
 		case "int64":
-			list[i] = GenCheckIntBlock(col)
+			list[i] = GenCheckIntBlock(col, "m")
 		case "float64":
-			list[i] = GenCheckFloatBlock(col)
+			list[i] = GenCheckFloatBlock(col, "m")
 		case "time.Time":
-			list[i] = GenCheckTimeBlock(col)
+			list[i] = GenCheckTimeBlock(col, "m")
+		case "bool":
+			list[i] = GenCheckBoolBlock(col, "m")
 		}
 	}
-	return fmt.Sprintf(ModelInsertMethodTemp, tab.ModelName, strings.Join(list, "\n"), db.ObjName, BackQuote(tab.TableName), db.ObjName, tab.PrimaryKey.FieldName)
+	return fmt.Sprintf(ModelInsertMethodTemp, tab.ModelName, strings.Join(list, "\n"), db.ObjName, GenInsertSQL(tab), tab.PrimaryKey.FieldName)
 }
 
 func GenUpdateFunc(tab Table, db Database) string {
 	list := make([]string, len(tab.Columns))
 	for i, col := range tab.Columns {
-		switch col.FieldType {
-		case "string":
-			list[i] = GenCheckStringBlock(col)
-		case "int64":
-			list[i] = GenCheckIntBlock(col)
-		case "float64":
-			list[i] = GenCheckFloatBlock(col)
-		case "time.Time":
-			list[i] = GenCheckTimeBlock(col)
+		if !col.AutoIncrement && col.ColumnName != tab.PrimaryKey.ColumnName {
+			switch col.FieldType {
+			case "string":
+				list[i] = GenCheckStringBlock(col, "m")
+			case "int64":
+				list[i] = GenCheckIntBlock(col, "m")
+			case "float64":
+				list[i] = GenCheckFloatBlock(col, "m")
+			case "time.Time":
+				list[i] = GenCheckTimeBlock(col, "m")
+			case "bool":
+				list[i] = GenCheckBoolBlock(col, "m")
 
+			}
 		}
 	}
-	return fmt.Sprintf(ModelUpdateMethodTemp, tab.ModelName, strings.Join(list, "\n"), db.ObjName, BackQuote(tab.TableName), tab.PrimaryKey.FieldName)
+	return fmt.Sprintf(ModelUpdateMethodTemp, tab.ModelName, strings.Join(list, "\n"), db.ObjName, BackQuote(tab.TableName),
+		BackQuote(tab.PrimaryKey.ColumnName), tab.PrimaryKey.FieldName)
+}
+
+func GenDeleteSQL(tab Table) string {
+	return fmt.Sprintf(DeleteSQLTemp, BackQuote(tab.TableName), BackQuote(tab.PrimaryKey.ColumnName))
+}
+
+func GenManyToManyDeleteSQL(info ManyToMany) string {
+	return fmt.Sprintf(DeleteSQLTemp, BackQuote(info.MidTab.TableName), BackQuote(info.MidLeftCol.ColumnName))
+}
+
+func GenManyToManyDeleteBlock(info ManyToMany) string {
+	return fmt.Sprintf(ManyToManyDeleteBlockTemp, GenManyToManyDeleteSQL(info), info.SrcCol.FieldName)
 }
 
 func GenDeleteFunc(tab Table, db Database) string {
-	return fmt.Sprintf(ModelDeleteMethodTemp, tab.ModelName, db.ObjName, BackQuote(tab.TableName), tab.PrimaryKey.FieldName)
+	list := make([]string, len(tab.ManyToManys))
+	for i, mtm := range tab.ManyToManys {
+		list[i] = GenManyToManyDeleteBlock(mtm)
+	}
+	return fmt.Sprintf(ModelDeleteMethodTemp, tab.ModelName, db.ObjName, strings.Join(list, "\n"), GenDeleteSQL(tab), tab.PrimaryKey.FieldName)
 }
 
 func GenNewMiddleTypeBlock(col Column) string {

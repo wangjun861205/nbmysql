@@ -11,4 +11,10 @@ func TestUnit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	for _, tab := range db.Tables {
+		err := db.CreateTableIfNotExists(tab)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
 }

@@ -9,14 +9,14 @@ import (
 
 var removeParenthesisRe = regexp.MustCompile(`\(.*?\)`)
 
-func GetLastId(db *sql.DB) int64 {
+func GetLastInsertId(db *sql.DB) (int64, error) {
 	id := new(Int)
 	row := db.QueryRow("SELECT LAST_INSERT_ID()")
 	err := row.Scan(id)
 	if err != nil {
-		panic(err)
+		return -1, err
 	}
-	return id.Value
+	return id.Value, nil
 }
 
 func BackQuote(s string) string {
