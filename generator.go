@@ -217,7 +217,11 @@ func Gen(db Database, outName string) error {
 		return err
 	}
 	defer f.Close()
-	_, err = f.Write(buf.Bytes())
+	n, err := f.Write(buf.Bytes())
+	if err != nil {
+		return err
+	}
+	err = f.Truncate(int64(n))
 	if err != nil {
 		return err
 	}
