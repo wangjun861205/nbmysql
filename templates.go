@@ -33,9 +33,12 @@ const ModelRelationTemp = `type %sTo%s struct {
 	}`
 
 const FuncArgTemp = `%s%s *%s`
-const FuncArgNameTemp = `%s%s`
+const FuncArgNameTemp = `%s`
+
+const MiddleTypeToGoTemp = `%s := %s.ToGo()`
 
 const NewModelFuncTemp = `func New%s(%s) *%s {
+		%s
 		%s := &%s{%s}
 		return %s
 	}`
@@ -258,10 +261,6 @@ const ModelFromRowsFuncTemp = `func %sFromRows(rows *sql.Rows) (*%s, error) {
 		if err != nil {
 			return nil, err
 		}
-		var (
-			%s
-		)
-		%s
 		return New%s(%s), nil
 	}`
 

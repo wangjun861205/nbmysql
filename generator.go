@@ -49,11 +49,32 @@ func GenModelRelation(srcTab, dstTab Table) string {
 }
 
 func GenNewFuncArg(col Column, tab Table) string {
-	return fmt.Sprintf(FuncArgTemp, tab.ArgName, col.FieldName, col.FieldType)
+	var argType string
+	switch col.FieldType {
+	case "string":
+		argType = "nbmysql.String"
+	case "int64":
+		argType = "nbmysql.Int"
+	case "float64":
+		argType = "nbmysql.Float"
+	case "bool":
+		argType = "nbmysql.Bool"
+	case "time.Time":
+		argType = "nbmysql.Time"
+	}
+	return fmt.Sprintf(FuncArgTemp, tab.ArgName, col.FieldName, argType)
 }
 
-func GenNewFuncArgName(col Column, tab Table) string {
-	return fmt.Sprintf(FuncArgNameTemp, tab.ArgName, col.FieldName)
+func GenNewFuncArgName(col Column) string {
+	return fmt.Sprintf(FuncArgNameTemp, "_"+col.ArgName)
+}
+
+func GenMiddleTypeToGo(tab Table) string {
+	list := make([]string, len(tab.Columns))
+	for i, col := range tab.Columns {
+		list[i] = fmt.Sprintf(MiddleTypeToGoTemp, "_"+col.ArgName, tab.ArgName+col.FieldName)
+	}
+	return strings.Join(list, "\n")
 }
 
 func GenNewFunc(tab Table) string {
@@ -61,9 +82,9 @@ func GenNewFunc(tab Table) string {
 	argNameList := make([]string, len(tab.Columns))
 	for i, col := range tab.Columns {
 		argList[i] = GenNewFuncArg(col, tab)
-		argNameList[i] = GenNewFuncArgName(col, tab)
+		argNameList[i] = GenNewFuncArgName(col)
 	}
-	return fmt.Sprintf(NewModelFuncTemp, tab.ModelName, strings.Join(argList, ", "), tab.ModelName, tab.ArgName, tab.ModelName,
+	return fmt.Sprintf(NewModelFuncTemp, tab.ModelName, strings.Join(argList, ", "), tab.ModelName, GenMiddleTypeToGo(tab), tab.ArgName, tab.ModelName,
 		strings.Join(argNameList, ", "), tab.ArgName)
 }
 
@@ -249,18 +270,12 @@ func GenFromRowsCheckBlock(col Column) string {
 func GenFromRowsFunc(tab Table) string {
 	midList := make([]string, len(tab.Columns))
 	midNameList := make([]string, len(tab.Columns))
-	varList := make([]string, len(tab.Columns))
-	nameList := make([]string, len(tab.Columns))
-	checkList := make([]string, len(tab.Columns))
 	for i, col := range tab.Columns {
 		midList[i] = GenNewMiddleTypeBlock(col)
 		midNameList[i] = "_" + col.ArgName
-		varList[i] = fmt.Sprintf("%s *%s", col.ArgName, col.FieldType)
-		nameList[i] = col.ArgName
-		checkList[i] = GenFromRowsCheckBlock(col)
 	}
 	return fmt.Sprintf(ModelFromRowsFuncTemp, tab.ModelName, tab.ModelName, strings.Join(midList, "\n"), strings.Join(midNameList, ", "),
-		strings.Join(varList, "\n"), strings.Join(checkList, "\n"), tab.ModelName, strings.Join(nameList, ", "))
+		tab.ModelName, strings.Join(midNameList, ", "))
 }
 
 func Gen(db Database, outName string) error {
