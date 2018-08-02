@@ -6,7 +6,6 @@ import (
 	"strings"
 )
 
-// type UniqueKey []string
 type UniqueKey []*Column
 
 type Column struct {
