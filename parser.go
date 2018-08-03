@@ -17,6 +17,12 @@ type ForeignKey struct {
 	DstTab *Table
 }
 
+type ReverseForeignKey struct {
+	SrcCol *Column
+	DstCol *Column
+	DstTab *Table
+}
+
 type ManyToMany struct {
 	SrcCol      *Column
 	MidLeftCol  *Column
@@ -76,13 +82,14 @@ var NameRe = regexp.MustCompile(`@Name\s*=\s*"(\w+?)";`)
 var TableRe = regexp.MustCompile(`(?ms)Table\s+(\w+)\s+{(.+?)};`)
 var ColumnRe = regexp.MustCompile(`Column\s+(\w+)\s+([\w\(\)]+)(.*?),`)
 var NullableRe = regexp.MustCompile(`NOT NULL`)
-var DefaultRe = regexp.MustCompile(`DEFAULT\s+(.*?)`)
+var DefaultRe = regexp.MustCompile(`DEFAULT\s+(['"].*['"]|[^\s]+)`)
 var AutoIncrementRe = regexp.MustCompile(`AUTO_INCREMENT`)
 var UniqueRe = regexp.MustCompile(`UNIQUE`)
 var ForeignKeyRe = regexp.MustCompile(`ForeignKey\s+(\w+)\s+(\w+)\s+(\w+),`)
 var ManyToManyRe = regexp.MustCompile(`ManyToMany\s+(\w+)\s+(\w+)\s+(\w+),`)
 var PrimaryKeyRe = regexp.MustCompile(`PRIMARY KEY\s+(.*?),`)
 var UniqueKeyRe = regexp.MustCompile(`UNIQUE KEY\s+\((.*?)\),`)
+var OnRe = regexp.MustCompile(`ON\s+(.*)`)
 
 func findPackage(s string) (string, error) {
 	pkg := PackageRe.FindStringSubmatch(s)
@@ -215,6 +222,10 @@ func ParseDatabase(file string) (Database, error) {
 			if err != nil {
 				return db, err
 			}
+			err = parseReverseForeignKey(info, &db.Tables[i], &db)
+			if err != nil {
+				return db, err
+			}
 		}
 		for _, info := range db.Tables[i].ManyToManyInfos {
 			err := parseManyToMany(info, &db.Tables[i], &db)
@@ -249,6 +260,10 @@ func parseTable(t []string, db Database) (Table, error) {
 		def := DefaultRe.FindStringSubmatch(column[3])
 		if len(def) > 0 {
 			col.Default = def[1]
+		}
+		on := OnRe.FindStringSubmatch(column[3])
+		if len(on) > 0 {
+			col.On = on[1]
 		}
 		table.Columns = append(table.Columns, col)
 	}
@@ -334,6 +349,45 @@ func parseForeignKey(info ForeignKeyInfo, tab *Table, db *Database) error {
 		SrcCol: srcCol,
 		DstCol: dstCol,
 	})
+	return nil
+}
+
+func parseReverseForeignKey(info ForeignKeyInfo, srcTab *Table, db *Database) error {
+	var dstTab *Table
+	for i, tab := range db.Tables {
+		if tab.TableName == info.DstTabName {
+			dstTab = &(db.Tables[i])
+			break
+		}
+	}
+	if dstTab == nil {
+		return fmt.Errorf("parse reverse forkeign key error: %s table not exsits", info.DstTabName)
+	}
+	var srcCol *Column
+	for i, col := range srcTab.Columns {
+		if col.ColumnName == info.SrcColName {
+			srcCol = &(srcTab.Columns[i])
+			break
+		}
+	}
+	if srcCol == nil {
+		return fmt.Errorf("parse reverse foreign key error: %s source column not exists", info.SrcColName)
+	}
+	var dstCol *Column
+	for i, col := range dstTab.Columns {
+		if col.ColumnName == info.SrcColName {
+			dstCol = &(dstTab.Columns[i])
+			break
+		}
+	}
+	if dstCol == nil {
+		return fmt.Errorf("parse reverse foreign key error: %s destination column not exists", info.DstColName)
+	}
+	if dstTab.ReverseForeignKeys == nil {
+		dstTab.ReverseForeignKeys = make([]ReverseForeignKey, 0, 8)
+	}
+	rfk := ReverseForeignKey{DstTab: srcTab, SrcCol: dstCol, DstCol: srcCol}
+	dstTab.ReverseForeignKeys = append(dstTab.ReverseForeignKeys, rfk)
 	return nil
 }
 

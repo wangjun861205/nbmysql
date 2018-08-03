@@ -19,20 +19,22 @@ type Column struct {
 	Default       string
 	Unique        bool
 	AutoIncrement bool
+	On            string
 }
 
 type Table struct {
-	Columns         []Column
-	ModelName       string
-	TableName       string
-	ArgName         string
-	PrimaryKey      *Column
-	AutoIncrement   *Column
-	ForeignKeyInfos []ForeignKeyInfo
-	ManyToManyInfos []ManyToManyInfo
-	ForeignKeys     []ForeignKey
-	ManyToManys     []ManyToMany
-	UniqueKeys      []UniqueKey
+	Columns            []Column
+	ModelName          string
+	TableName          string
+	ArgName            string
+	PrimaryKey         *Column
+	AutoIncrement      *Column
+	ForeignKeyInfos    []ForeignKeyInfo
+	ManyToManyInfos    []ManyToManyInfo
+	ForeignKeys        []ForeignKey
+	ReverseForeignKeys []ReverseForeignKey
+	ManyToManys        []ManyToMany
+	UniqueKeys         []UniqueKey
 }
 
 type Database struct {
@@ -63,11 +65,14 @@ func (db *Database) CreateTableIfNotExists(tab Table) error {
 		if !col.Nullable {
 			l = append(l, "NOT NULL")
 		}
+		if col.Unique {
+			l = append(l, "UNIQUE")
+		}
 		if col.Default != "" {
 			l = append(l, "DEFAULT "+col.Default)
 		}
-		if col.Unique {
-			l = append(l, "UNIQUE")
+		if col.On != "" {
+			l = append(l, "ON "+col.On)
 		}
 		colList[i] = strings.Join(l, " ")
 	}
