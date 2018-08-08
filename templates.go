@@ -29,12 +29,43 @@ const ModelTemp = `type %s struct {
 		_IsStored bool
 }`
 
-const FuncArgTemp = `%s%s *%s`
+const FuncArgTemp = `%s %s`
 const FuncArgNameTemp = `%s`
 
-const MiddleTypeToGoTemp = `%s := %s.ToGo()`
+const CheckIntArgTemp = `if imag(%s) > 0 {
+	 *%s = int64(real(%s)) 
+	 } else { 
+	 %s = nil 
+	 }`
+
+const CheckFloatArgTemp = `if imag(%s) > 0 {
+	*%s = float64(real(%s))
+	} else {
+		%s = nil
+	}`
+
+const CheckStringArgTemp = `if %s != nil {
+	*%s = string(%s)
+} else {
+	%s = nil
+}`
+
+const CheckBoolArgTemp = `if %s == 0 {
+	*%s = false 
+	} else if %s > 0 {
+	*%s = true
+	} else {
+		%s = nil
+	}`
+
+const CheckTimeArgTemp = `%s = %s`
+
+// const MiddleTypeToGoTemp = `%s := %s.ToGo()`
+
+const NewModelFuncVarTemp = `%s := new(%s)`
 
 const NewModelFuncTemp = `func New%s(%s) *%s {
+		%s
 		%s
 		%s := &%s{%s, false}
 		return %s
@@ -104,7 +135,7 @@ const ModelCheckTimeBlockTemp = `if %s.%s != nil {
 
 const ModelCheckBoolBlockTemp = `if %s.%s != nil {
 		colList = append(colList, "%s")
-		valList = append(valList, fmt.Sprintf("%%t", *%s.%s)
+		valList = append(valList, fmt.Sprintf("%%t", *%s.%s))
 	}`
 
 const ModelInsertMethodTemp = `func (m *%s) Insert() error {
@@ -114,6 +145,7 @@ const ModelInsertMethodTemp = `func (m *%s) Insert() error {
 		res, err := %s.Exec(fmt.Sprintf("%s", strings.Join(colList, ", "), strings.Join(valList, ", ")))
 		if err != nil {
 			if sqlErr, ok := err.(*mysql.MySQLError); ok && (sqlErr.Number == 1022 || sqlErr.Number == 1062){
+				m._IsStored = true
 				return nbmysql.ErrDupKey
 			}
 			return err
@@ -206,7 +238,7 @@ const ModelFromRowsFuncTemp = `func %sFromRows(rows *sql.Rows) (*%s, error) {
 		if err != nil {
 			return nil, err
 		}
-		return New%s(%s), nil
+		return &%s{%s, true}, nil
 	}`
 
 const ModelFromRowFuncTemp = `func %sFromRow(row *sql.Row) (*%s, error) {
@@ -215,7 +247,7 @@ const ModelFromRowFuncTemp = `func %sFromRow(row *sql.Row) (*%s, error) {
 	if err != nil {
 		return nil, err
 	}
-	return New%s(%s), nil
+	return &%s{%s, true}, nil
 }`
 
 const MapElemTemp = `"%s": "%s",`
@@ -382,3 +414,12 @@ const ManyToManyRemoveMethodTemp = `func(%s *%s) error {
 	_, err := %s.Exec("%s", *m.%s, *%s.%s)
 	return err
 }`
+
+const FieldCheckNullTemp = `if m.%s == nil {
+	return errors.New("%s.%s can not be null")
+	}`
+
+const ModelCheckMethodTemp = `func (m *%s) check() error {
+	%s
+	return nil
+	}`

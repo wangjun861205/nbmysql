@@ -48,6 +48,10 @@ func main() {
 						log.Fatal(err)
 					}
 				}
+				err := db.AddForeignKeyConstraint()
+				if err != nil {
+					log.Fatal(err)
+				}
 			}
 		}
 	}

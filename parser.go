@@ -52,6 +52,14 @@ var GoMidMap = map[string]string{
 	"time":   "Time",
 }
 
+var GoArgMap = map[string]string{
+	"int64":     "complex128",
+	"float64":   "complex128",
+	"string":    "[]byte",
+	"bool":      "int",
+	"time.Time": "time.Time",
+}
+
 var MySqlGoMap = map[string]string{
 	"INT":       "int64",
 	"FLOAT":     "float64",

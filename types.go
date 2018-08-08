@@ -3,7 +3,10 @@ package nbmysql
 import (
 	"database/sql"
 	"fmt"
+	"log"
 	"strings"
+
+	"github.com/go-sql-driver/mysql"
 )
 
 type UniqueKey []*Column
@@ -96,4 +99,27 @@ func (db *Database) CreateTableIfNotExists(tab Table) error {
 		BackQuote(tab.PrimaryKey.ColumnName), uniqueClause)
 	_, err = conn.Exec(stmt)
 	return err
+}
+
+func (db *Database) AddForeignKeyConstraint() error {
+	conn, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s)/%s", db.Username, db.Password, db.Address, db.DatabaseName))
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	for _, tab := range db.Tables {
+		for _, fk := range tab.ForeignKeys {
+			_, err := conn.Exec(fmt.Sprintf("ALTER TABLE %s ADD CONSTRAINT %s FOREIGN KEY (%s) REFERENCES %s (%s) ON DELETE CASCADE",
+				BackQuote(tab.TableName), BackQuote("fk_"+fk.DstTab.TableName+"__"+fk.DstCol.ColumnName), BackQuote(fk.SrcCol.ColumnName),
+				BackQuote(fk.DstTab.TableName), BackQuote(fk.DstCol.ColumnName)))
+			if err != nil {
+				if sqlErr, ok := err.(*mysql.MySQLError); ok && sqlErr.Number == 1826 {
+					log.Printf("warnning: %s", sqlErr.Error())
+					continue
+				}
+				return err
+			}
+		}
+	}
+	return nil
 }
