@@ -109,9 +109,24 @@ func (db *Database) AddForeignKeyConstraint() error {
 	defer conn.Close()
 	for _, tab := range db.Tables {
 		for _, fk := range tab.ForeignKeys {
-			_, err := conn.Exec(fmt.Sprintf("ALTER TABLE %s ADD CONSTRAINT %s FOREIGN KEY (%s) REFERENCES %s (%s) ON DELETE CASCADE",
+			_, err := conn.Exec(fmt.Sprintf("ALTER TABLE %s ADD CONSTRAINT %s FOREIGN KEY (%s) REFERENCES %s (%s) ON DELETE CASCADE ON UPDATE CASCADE",
 				BackQuote(tab.TableName), BackQuote("fk_"+fk.DstTab.TableName+"__"+fk.DstCol.ColumnName), BackQuote(fk.SrcCol.ColumnName),
 				BackQuote(fk.DstTab.TableName), BackQuote(fk.DstCol.ColumnName)))
+			if err != nil {
+				if sqlErr, ok := err.(*mysql.MySQLError); ok && sqlErr.Number == 1826 {
+					log.Printf("warnning: %s", sqlErr.Error())
+					continue
+				}
+				return err
+			}
+		}
+		for _, mtm := range tab.ManyToManys {
+			_, err := conn.Exec(fmt.Sprintf("ALTER TABLE %s ADD CONSTRAINT %s FOREIGN KEY (%s) REFERENCES %s (%s) ON DELETE CASCADE ON UPDATE CASCADE",
+				BackQuote(mtm.MidTab.TableName),
+				BackQuote("midfk_"+tab.TableName+"__"+mtm.SrcCol.ColumnName),
+				BackQuote(mtm.MidLeftCol.ColumnName),
+				BackQuote(tab.TableName),
+				BackQuote(mtm.SrcCol.ColumnName)))
 			if err != nil {
 				if sqlErr, ok := err.(*mysql.MySQLError); ok && sqlErr.Number == 1826 {
 					log.Printf("warnning: %s", sqlErr.Error())

@@ -6,10 +6,10 @@ const ImportTemp = `import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 	"github.com/wangjun861205/nbmysql"
-	"github.com/go-sql-driver/mysql"
 )`
 
 const DbTemp = `var %s *sql.DB`
@@ -20,6 +20,7 @@ const InitFuncTemp = `func init() {
 		panic(err)
 	}
 	%s = db
+	%s
 }`
 
 const FieldTemp = `%s *%s`
@@ -60,15 +61,11 @@ const CheckBoolArgTemp = `if %s == 0 {
 
 const CheckTimeArgTemp = `%s = %s`
 
-// const MiddleTypeToGoTemp = `%s := %s.ToGo()`
-
-const NewModelFuncVarTemp = `%s := new(%s)`
+const NewModelAsignTemp = `%s: %s`
 
 const NewModelFuncTemp = `func New%s(%s) *%s {
-		%s
-		%s
-		%s := &%s{%s, false}
-		return %s
+		return &%s{%s, 
+			_IsStored: false}
 	}`
 
 const AllModelFuncTemp = `func All%s() ([]*%s, error) {
@@ -138,16 +135,37 @@ const ModelCheckBoolBlockTemp = `if %s.%s != nil {
 		valList = append(valList, fmt.Sprintf("%%t", *%s.%s))
 	}`
 
+// const ModelInsertMethodTemp = `func (m *%s) Insert() error {
+// 		colList := make([]string, 0, 32)
+// 		valList := make([]string, 0, 32)
+// 		%s
+// 		res, err := %s.Exec(fmt.Sprintf("%s", strings.Join(colList, ", "), strings.Join(valList, ", ")))
+// 		if err != nil {
+// 			if sqlErr, ok := err.(*mysql.MySQLError); ok && (sqlErr.Number == 1022 || sqlErr.Number == 1062){
+// 				m._IsStored = true
+// 				return nbmysql.ErrDupKey
+// 			}
+// 			return err
+// 		}
+// 		lastInsertId, err := res.LastInsertId()
+// 		if err != nil {
+// 			return err
+// 		}
+// 		m.%s = &lastInsertId
+// 		m._IsStored = true
+// 		return nil
+// }`
+
+const ModelInsertArgTemp = `m.%s`
+
 const ModelInsertMethodTemp = `func (m *%s) Insert() error {
-		colList := make([]string, 0, 32)
-		valList := make([]string, 0, 32)
-		%s
-		res, err := %s.Exec(fmt.Sprintf("%s", strings.Join(colList, ", "), strings.Join(valList, ", ")))
+		err := m.check()
 		if err != nil {
-			if sqlErr, ok := err.(*mysql.MySQLError); ok && (sqlErr.Number == 1022 || sqlErr.Number == 1062){
-				m._IsStored = true
-				return nbmysql.ErrDupKey
-			}
+			return err
+		}
+		%s
+		res, err := %sInsertStmt.Exec(argList...)
+		if err != nil {
 			return err
 		}
 		lastInsertId, err := res.LastInsertId()
@@ -159,71 +177,117 @@ const ModelInsertMethodTemp = `func (m *%s) Insert() error {
 		return nil
 }`
 
+// const ModelInsertOrUpdateMethodTemp = `func (m *%s) InsertOrUpdate() error {
+// 	err := m.Insert()
+// 	if err != nil {
+// 		if err == nbmysql.ErrDupKey {
+// 			err = m.Update()
+// 			if err != nil {
+// 				return err
+// 			}
+// 			return nil
+// 		}
+// 		return err
+// 	}
+// 	return nil
+// }`
+
+const InsertOrUpdateArgTemp = `m.%s`
 const ModelInsertOrUpdateMethodTemp = `func (m *%s) InsertOrUpdate() error {
-	err := m.Insert()
+	err := m.check()
 	if err != nil {
-		if err == nbmysql.ErrDupKey {
-			err = m.Update()
-			if err != nil {
-				return err
-			}
-			return nil
-		}
+		return err
+	}
+	%s
+	argList = append(argList, argList...)
+	res, err := %sInsertOrUpdateStmt.Exec(argList...)
+	if err != nil {
+		return err
+	}
+	lastInsertId, err := res.LastInsertId()
+	if err != nil {
+		return err
+	}
+	m.%s = &lastInsertId
+	m._IsStored = true
+	return nil
+}`
+
+// const ModelUpdateMethodTemp = `func (m *%s) Update() error {
+// 		colList := make([]string, 0, 32)
+// 		valList := make([]string, 0, 32)
+// 		%s
+// 		updateList := make([]string, 0, 32)
+// 		for i := 0; i < len(colList); i++ {
+// 			updateList = append(updateList, fmt.Sprintf("%%s=%%s", colList[i], valList[i]))
+// 		}
+// 		_, err := %s.Exec(fmt.Sprintf("UPDATE %s SET %%s WHERE %s = ?", strings.Join(updateList, ", ")), *m.%s)
+// 		if err != nil {
+// 			return err
+// 		}
+// 		m._IsStored = true
+// 		return err
+// 	}`
+
+const UpdateArgTemp = `m.%s`
+const ModelUpdateMethodTemp = `func (m *%s) Update() error {
+	err := m.check()
+	if err != nil {
+		return err
+	}
+	%s
+	argList = append(argList, m.%s)
+	_, err = %sUpdateStmt.Exec(argList...)
+	if err != nil {
 		return err
 	}
 	return nil
 }`
 
-const ModelUpdateMethodTemp = `func (m *%s) Update() error {
-		colList := make([]string, 0, 32)
-		valList := make([]string, 0, 32)
-		%s
-		updateList := make([]string, 0, 32)
-		for i := 0; i < len(colList); i++ {
-			updateList = append(updateList, fmt.Sprintf("%%s=%%s", colList[i], valList[i]))
-		}
-		_, err := %s.Exec(fmt.Sprintf("UPDATE %s SET %%s WHERE %s = ?", strings.Join(updateList, ", ")), *m.%s)
-		if err != nil {
-			return err
-		}
-		m._IsStored = true
-		return err
-	}`
+// const DeleteSQLTemp = `DELETE FROM %s WHERE %s = ?`
 
-const DeleteSQLTemp = `DELETE FROM %s WHERE %s = ?`
+// const ManyToManyDeleteBlockTemp = `_, err = tx.Exec("%s", *m.%s)
+// 	if err != nil {
+// 		tx.Rollback()
+// 		return err
+// 		}`
 
-const ManyToManyDeleteBlockTemp = `_, err = tx.Exec("%s", *m.%s)
+// const CascadeDeleteSQLTemp = `DELETE FROM %s WHERE %s = ?`
+// const CascadeDeleteLoopTemp = `
+// 	_, err = tx.Exec("%s", *m.%s)
+// 	if err != nil {
+// 		tx.Rollback()
+// 		return err
+// 	}
+// `
+// const CascadeDeleteBlockTemp = `if cascade {
+// 	%s
+// }`
+
+// const ModelDeleteMethodTemp = `func (m *%s) Delete(cascade bool) error {
+// 		tx, err := %s.Begin()
+// 		if err != nil {
+// 			return err
+// 		}
+// 		%s
+// 		%s
+// 		_, err = tx.Exec("%s", *m.%s)
+// 		if err != nil {
+// 			tx.Rollback()
+// 			return err
+// 		}
+// 		m._IsStored = false
+// 		return tx.Commit()
+// 	}`
+
+const DeleteArgTemp = `m.%s`
+const ModelDeleteMethodTemp = `func (m *%s) Delete() error {
+	_, err := %sDeleteStmt.Exec(%s)
 	if err != nil {
-		tx.Rollback()
-		return err
-		}`
-
-const CascadeDeleteSQLTemp = `DELETE FROM %s WHERE %s = ?`
-const CascadeDeleteLoopTemp = `
-	_, err = tx.Exec("%s", *m.%s)
-	if err != nil {
-		tx.Rollback()
 		return err
 	}
-`
-const CascadeDeleteBlockTemp = `if cascade {
-	%s
-}`
-
-const ModelDeleteMethodTemp = `func (m *%s) Delete(cascade bool) error {
-		tx, err := %s.Begin()
-		if err != nil {
-			return err
-		}
-		%s
-		%s
-		_, err = tx.Exec("%s", *m.%s)
-		if err != nil {
-			tx.Rollback()
-			return err
-		}
-		m._IsStored = false
-		return tx.Commit()
+	m._IsStored = false
+	return nil
 	}`
 
 const NewMiddleTypeTemp = `_%s := new(nbmysql.%s)`
@@ -311,7 +375,7 @@ const ReverseForeignKeyAllMethodTemp = `func() ([]*%s, error) {
 	return list, nil
 }`
 
-const ReverseForeignKeyQuerySQLTemp = `SELECT * FROM %s WHERE %s = ? AND %s`
+const ReverseForeignKeyQuerySQLTemp = `SELECT * FROM %s WHERE %s = ? AND %%s`
 const ReverseForeignKeyQueryMethodTemp = `func(query string) ([]*%s, error) {
 	if m.%s == nil {
 		return nil, errors.New("%s.%s must not be nil")
@@ -319,7 +383,7 @@ const ReverseForeignKeyQueryMethodTemp = `func(query string) ([]*%s, error) {
 	for k, v := range %sMap {
 		query = strings.Replace(query, k, v, -1)
 	}
-	rows, err := %s.Query("%s", *m.%s)
+	rows, err := %s.Query(fmt.Sprintf("%s", query), *m.%s)
 	if err != nil {
 		return nil, err
 	}
@@ -397,21 +461,27 @@ const ManyToManyQueryMethodTemp = `func(query string) ([]*%s, error) {
 	return list, nil
 }`
 
-const ManyToManyAddSQLTemp = `INSERT INTO %s (%s, %s) VALUES (?, ?)`
+// const ManyToManyAddSQLTemp = `INSERT INTO %s (%s, %s) VALUES (?, ?)`
 const ManyToManyAddMethodTemp = `func(%s *%s) error {
+	if !m._IsStored {
+		return errors.New("%s model is not stored in database")
+	}
 	if !%s._IsStored {
 		return errors.New("%s model is not stored in database")
 	}
-	_, err := %s.Exec("%s", *m.%s, *%s.%s)
+	_, err := %sTo%sInsertStmt.Exec(m.%s, %s.%s)
 	return err
 }`
 
-const ManyToManyRemoveSQLTemp = `DELETE FROM %s WHERE %s = ? and %s = ?`
+// const ManyToManyRemoveSQLTemp = `DELETE FROM %s WHERE %s = ? and %s = ?`
 const ManyToManyRemoveMethodTemp = `func(%s *%s) error {
+	if !m._IsStored {
+		return errors.New("%s model is not stored in database")
+	}
 	if !%s._IsStored {
 		return errors.New("%s model is not stored in database")
 	}
-	_, err := %s.Exec("%s", *m.%s, *%s.%s)
+	_, err := %sTo%sDeleteStmt.Exec(m.%s, %s.%s)
 	return err
 }`
 
@@ -422,4 +492,69 @@ const FieldCheckNullTemp = `if m.%s == nil {
 const ModelCheckMethodTemp = `func (m *%s) check() error {
 	%s
 	return nil
+	}`
+
+const InsertStmtTemp = `var %sInsertStmt *sql.Stmt`
+const UpdateStmtTemp = `var %sUpdateStmt *sql.Stmt`
+const DeleteStmtTemp = `var %sDeleteStmt *sql.Stmt`
+const InsertOrUpdateStmtTemp = `var %sInsertOrUpdateStmt *sql.Stmt`
+const ManyToManyDeleteStmtTemp = `var %sTo%sDeleteStmt *sql.Stmt`
+
+const InsertStmtInitTemp = `%sInsertStmt, err = %s.Prepare("INSERT INTO %s (%s) VALUES (%s)")
+if err != nil {
+	log.Fatal(err)
+	}`
+const UpdateStmtInitTemp = `%sUpdateStmt, err = %s.Prepare("UPDATE %s SET %s WHERE %s = ?")
+if err != nil {
+	log.Fatal(err)
+	}`
+const DeleteStmtInitTemp = `%sDeleteStmt, err = %s.Prepare("DELETE FROM %s WHERE %s = ?")
+if err != nil {
+	log.Fatal(err)
+	}`
+const InsertMidStmtInitTemp = `%sInsertStmt, err = %s.Prepare("INSERT INTO %s (%s, %s) VALUES (?, ?)")
+if err != nil {
+	log.Fatal(err)
+	}`
+const ManyToManyDeleteStmtInitTemp = `%sTo%sDeleteStmt, err = %s.Prepare("DELETE FROM %s WHERE %s = ? AND %s = ?")`
+
+const UpdateColumnTemp = `%s = ?`
+const UpdateLastInsertIDTemp = `%s = LAST_INSERT_ID(%s)`
+const InsertOrUpdateStmtInitTemp = `%sInsertOrUpdateStmt, err = %s.Prepare("INSERT INTO %s (%s) VALUES (%s) ON DUPLICATE KEY UPDATE %s, %s")
+if err != nil {
+	log.Fatal(err)
+	}`
+
+const StmtArgTemp = `argList = append(argList, m.%s)`
+const StmtArgNilToDefaultTemp = `if m.%s == nil {
+	argList = append(argList, %v)
+	} else {
+	argList = append(argList, m.%s)
+	}`
+const StmtArgNilToDefaultBlockTemp = `argList := make([]interface{}, 0, %d)
+%s`
+
+const QueryOneFuncTemp = `func QueryOne%s(query string) (*%s, error) {
+	for k, v := range %sMap {
+		query = strings.Replace(query, k, v, -1)
+		}
+	row := %s.QueryRow(fmt.Sprintf("SELECT * FROM %s WHERE %%s", query))
+	return %sFromRow(row)
+	}`
+
+const ModelSetFieldMethodTemp = `func (m *%s) Set%s(val %s, null bool) {
+	if null {
+		m.%s = nil
+		m._IsStored = false
+		return
+		}
+	m.%s = &val
+	m._IsStored = false
+	}`
+
+const ModelGetFieldMethodTemp = `func (m *%s) Get%s() (%s, bool) {
+	if m.%s == nil {
+		return %s, true
+		}
+	return *m.%s, false
 	}`
