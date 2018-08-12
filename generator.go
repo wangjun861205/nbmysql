@@ -650,6 +650,79 @@ func GenStmtArgNilToDefaultBlock(tab Table) string {
 	return fmt.Sprintf(StmtArgNilToDefaultBlockTemp, len(list), strings.Join(list, "\n"))
 }
 
+func GenModelListType(tab Table) string {
+	return fmt.Sprintf(ModelListTypeTemp, tab.ModelName, tab.ModelName)
+}
+
+func GenModelCompareMethod(col Column) string {
+	var temp string
+	switch col.FieldType {
+	case "int64":
+		temp = ModelCompareByIntMethodTemp
+	case "float64":
+		temp = ModelCompareByFloatMethodTemp
+	case "string":
+		temp = ModelCompareByStringMethodTemp
+	case "bool":
+		temp = ModelCompareByBoolMethodTemp
+	case "time.Time":
+		temp = ModelCompareByTimeMethodTemp
+	}
+	return fmt.Sprintf(temp, col.FieldName, col.FieldName, col.FieldName, col.FieldName, col.FieldName)
+}
+
+func GenModelSortMethodsStructType(tab Table) string {
+	list := make([]string, len(tab.Columns))
+	for i, col := range tab.Columns {
+		list[i] = fmt.Sprintf(ModelSortMethodsStructFieldTypeTemp, col.FieldName)
+	}
+	return fmt.Sprintf(ModelSortMethodsStructTypeTemp, tab.ModelName, strings.Join(list, "\n"))
+}
+
+func GenModelSortMethodsFunc(tab Table) string {
+	list := make([]string, len(tab.Columns))
+	for i, col := range tab.Columns {
+		list[i] = GenModelCompareMethod(col)
+	}
+	return fmt.Sprintf(ModelSortMethodsStructFuncTemp, tab.ModelName, tab.ModelName, tab.ModelName, strings.Join(list, "\n"))
+}
+
+func GenModelListLenMethod(tab Table) string {
+	return fmt.Sprintf(ModelListLenMethodTemp, tab.ModelName)
+}
+
+func GenModelListSwapMethod(tab Table) string {
+	return fmt.Sprintf(ModelListSwapMethodTemp, tab.ModelName)
+}
+
+func GenModelListLessMethod(tab Table) string {
+	return fmt.Sprintf(ModelListLessMethodTemp, tab.ModelName)
+}
+
+func GenModelSortFuncSwitchBlock(col Column, tab Table) string {
+	return fmt.Sprintf(ModelSortFuncSwitchBlockTemp,
+		col.FieldName,
+		tab.ArgName,
+		tab.ArgName,
+		col.FieldName)
+}
+
+func GenModelSortFunc(tab Table) string {
+	list := make([]string, len(tab.Columns))
+	for i, col := range tab.Columns {
+		list[i] = GenModelSortFuncSwitchBlock(col, tab)
+	}
+	return fmt.Sprintf(ModelSortFuncTemp,
+		tab.ModelName,
+		tab.ModelName,
+		tab.ArgName,
+		tab.ModelName,
+		len(tab.Columns),
+		tab.ArgName,
+		strings.Join(list, "\n"),
+		tab.ArgName)
+}
+
 func Gen(db Database, outName string) error {
 	buf := bytes.NewBuffer([]byte{})
 	buf.WriteString(GenPackage(db.Package) + "\n\n")
@@ -691,6 +764,13 @@ func Gen(db Database, outName string) error {
 		buf.WriteString(GenFromRowFunc(tab) + "\n\n")
 		buf.WriteString(GenModelExistsMethod(tab, db) + "\n\n")
 		buf.WriteString(GenModelCheckMethod(tab) + "\n\n")
+		buf.WriteString(GenModelListType(tab) + "\n\n")
+		buf.WriteString(GenModelListLenMethod(tab) + "\n\n")
+		buf.WriteString(GenModelListSwapMethod(tab) + "\n\n")
+		buf.WriteString(GenModelListLessMethod(tab) + "\n\n")
+		buf.WriteString(GenModelSortMethodsStructType(tab) + "\n\n")
+		buf.WriteString(GenModelSortMethodsFunc(tab) + "\n\n")
+		buf.WriteString(GenModelSortFunc(tab) + "\n\n")
 	}
 	f, err := os.OpenFile(outName, os.O_CREATE|os.O_WRONLY, 0755)
 	if err != nil {

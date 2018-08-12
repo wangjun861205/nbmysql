@@ -177,21 +177,6 @@ const ModelInsertMethodTemp = `func (m *%s) Insert() error {
 		return nil
 }`
 
-// const ModelInsertOrUpdateMethodTemp = `func (m *%s) InsertOrUpdate() error {
-// 	err := m.Insert()
-// 	if err != nil {
-// 		if err == nbmysql.ErrDupKey {
-// 			err = m.Update()
-// 			if err != nil {
-// 				return err
-// 			}
-// 			return nil
-// 		}
-// 		return err
-// 	}
-// 	return nil
-// }`
-
 const InsertOrUpdateArgTemp = `m.%s`
 const ModelInsertOrUpdateMethodTemp = `func (m *%s) InsertOrUpdate() error {
 	err := m.check()
@@ -213,22 +198,6 @@ const ModelInsertOrUpdateMethodTemp = `func (m *%s) InsertOrUpdate() error {
 	return nil
 }`
 
-// const ModelUpdateMethodTemp = `func (m *%s) Update() error {
-// 		colList := make([]string, 0, 32)
-// 		valList := make([]string, 0, 32)
-// 		%s
-// 		updateList := make([]string, 0, 32)
-// 		for i := 0; i < len(colList); i++ {
-// 			updateList = append(updateList, fmt.Sprintf("%%s=%%s", colList[i], valList[i]))
-// 		}
-// 		_, err := %s.Exec(fmt.Sprintf("UPDATE %s SET %%s WHERE %s = ?", strings.Join(updateList, ", ")), *m.%s)
-// 		if err != nil {
-// 			return err
-// 		}
-// 		m._IsStored = true
-// 		return err
-// 	}`
-
 const UpdateArgTemp = `m.%s`
 const ModelUpdateMethodTemp = `func (m *%s) Update() error {
 	err := m.check()
@@ -243,42 +212,6 @@ const ModelUpdateMethodTemp = `func (m *%s) Update() error {
 	}
 	return nil
 }`
-
-// const DeleteSQLTemp = `DELETE FROM %s WHERE %s = ?`
-
-// const ManyToManyDeleteBlockTemp = `_, err = tx.Exec("%s", *m.%s)
-// 	if err != nil {
-// 		tx.Rollback()
-// 		return err
-// 		}`
-
-// const CascadeDeleteSQLTemp = `DELETE FROM %s WHERE %s = ?`
-// const CascadeDeleteLoopTemp = `
-// 	_, err = tx.Exec("%s", *m.%s)
-// 	if err != nil {
-// 		tx.Rollback()
-// 		return err
-// 	}
-// `
-// const CascadeDeleteBlockTemp = `if cascade {
-// 	%s
-// }`
-
-// const ModelDeleteMethodTemp = `func (m *%s) Delete(cascade bool) error {
-// 		tx, err := %s.Begin()
-// 		if err != nil {
-// 			return err
-// 		}
-// 		%s
-// 		%s
-// 		_, err = tx.Exec("%s", *m.%s)
-// 		if err != nil {
-// 			tx.Rollback()
-// 			return err
-// 		}
-// 		m._IsStored = false
-// 		return tx.Commit()
-// 	}`
 
 const DeleteArgTemp = `m.%s`
 const ModelDeleteMethodTemp = `func (m *%s) Delete() error {
@@ -558,3 +491,98 @@ const ModelGetFieldMethodTemp = `func (m *%s) Get%s() (%s, bool) {
 		}
 	return *m.%s, false
 	}`
+
+const ModelListTypeTemp = `type %sList struct {
+	Models []*%s
+	Funcs []func(i, j int) int
+	}`
+const ModelCompareByIntMethodTemp = `By%s: func(i, j int) int {
+	if *ml.Models[i].%s == *ml.Models[j].%s {
+		return 0
+	}
+	if *ml.Models[i].%s < *ml.Models[j].%s {
+		return -1
+	}
+	return 1
+	},`
+const ModelCompareByFloatMethodTemp = `By%s: func(i, j int) int {
+	if *ml.Models[i].%s == *ml.Models[j].%s {
+		return 0
+	}
+	if *ml.Models[i].%s < *ml.Models[j].%s {
+		return -1
+	}
+	return 1
+	},`
+const ModelCompareByStringMethodTemp = `By%s: func(i, j int) int {
+	if *ml.Models[i].%s == *ml.Models[j].%s {
+		return 0
+	}
+	if *ml.Models[i].%s < *ml.Models[j].%s {
+		return -1
+	}
+	return 1
+	},`
+const ModelCompareByBoolMethodTemp = `By%s: func(i, j int) int {
+	if *ml.Models[i].%s == *ml.Models[j].%s {
+		return 0
+	}
+	if *ml.Models[i].%s == false && *ml.Models[j].%s == true {
+		return -1
+	}
+	return 1
+	},`
+const ModelCompareByTimeMethodTemp = `By%s: func(i, j int) int {
+	if ml.Models[i].%s.Equal(*ml.Models[j].%s) {
+		return 0
+	}
+	if ml.Models[i].%s.Before(*ml.Models[j].%s) {
+		return -1
+	}
+	return 1
+	},`
+const ModelSortMethodsStructFieldTypeTemp = `By%s func(i, j int) int`
+const ModelSortMethodsStructTypeTemp = `type %sSortMethods struct {
+	%s
+	}`
+const ModelSortMethodsStructFuncTemp = `func (ml %sList) SortMethods() %sSortMethods {
+	return %sSortMethods{
+		%s
+		}
+	}`
+const ModelListLenMethodTemp = `func (ml %sList) Len() int {
+	return len(ml.Models)
+	}`
+const ModelListSwapMethodTemp = `func (ml %sList) Swap(i, j int) {
+	ml.Models[i], ml.Models[j] = ml.Models[j], ml.Models[i]
+	}`
+const ModelListLessMethodTemp = `func (ml %sList) Less(i, j int) bool {
+	var less bool
+	for _, f := range ml.Funcs {
+		res := f(i, j)
+		if res == -1 {
+			less = true
+			break
+		} else if res == 1 {
+			break
+		}
+		continue
+	}
+	return less
+}`
+
+const ModelSortFuncSwitchBlockTemp = `case "%s": 
+	%sList.Funcs = append(%sList.Funcs, sortMethods.By%s)`
+const ModelSortFuncTemp = `func %sSortBy(ml []*%s, fields ...string) {
+	%sList := %sList {
+		Models: ml,
+		Funcs: make([]func(i, j int) int, 0, %d),
+		}
+	sortMethods := %sList.SortMethods()
+	for _, field := range fields {
+		switch field {
+			%s
+		}
+	}
+	sort.Sort(%sList)
+}`
