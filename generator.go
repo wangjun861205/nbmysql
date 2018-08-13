@@ -10,22 +10,27 @@ import (
 	"strings"
 )
 
+//GenPackage Generate package statement
 func GenPackage(pkg string) string {
 	return fmt.Sprintf(PackageTemp, pkg)
 }
 
+//GenDb Generate database object declare statement
 func GenDb(db Database) string {
 	return fmt.Sprintf(DbTemp, db.ObjName)
 }
 
+//GenInitFunc Generate init function
 func GenInitFunc(db Database, stmtInit string) string {
 	return fmt.Sprintf(InitFuncTemp, db.Username, db.Password, db.Address, db.DatabaseName, db.ObjName, stmtInit)
 }
 
+//GenMapElemBlock Generate map element
 func GenMapElemBlock(col Column) string {
 	return fmt.Sprintf(MapElemTemp, "@"+col.FieldName, BackQuote(col.ColumnName))
 }
 
+//GenQueryFieldMapBlock Generate a map for mapping filed name to column name in where clause in query
 func GenQueryFieldMapBlock(tab Table) string {
 	elemList := make([]string, len(tab.Columns))
 	for i, col := range tab.Columns {
@@ -34,10 +39,12 @@ func GenQueryFieldMapBlock(tab Table) string {
 	return fmt.Sprintf(QueryFieldMapTemp, tab.ModelName, strings.Join(elemList, "\n"))
 }
 
+//GenField Generate field definition in model struct
 func GenField(col Column) string {
 	return fmt.Sprintf(FieldTemp, col.FieldName, col.FieldType)
 }
 
+//GenModel Generate model defination
 func GenModel(tab Table) string {
 	list := make([]string, len(tab.Columns))
 	for i, col := range tab.Columns {
@@ -46,6 +53,7 @@ func GenModel(tab Table) string {
 	return fmt.Sprintf(ModelTemp, tab.ModelName, strings.Join(list, "\n"))
 }
 
+//GenModelGetFieldMethod Generate model get xxx field value method
 func GenModelGetFieldMethod(col Column, tab Table) string {
 	return fmt.Sprintf(ModelGetFieldMethodTemp,
 		tab.ModelName,
@@ -71,6 +79,7 @@ func GenModelGetFieldMethod(col Column, tab Table) string {
 		col.FieldName)
 }
 
+//GenModelSetFieldMethod Generate model set xxx field value method
 func GenModelSetFieldMethod(col Column, tab Table) string {
 	return fmt.Sprintf(ModelSetFieldMethodTemp,
 		tab.ModelName,
@@ -80,6 +89,7 @@ func GenModelSetFieldMethod(col Column, tab Table) string {
 		col.FieldName)
 }
 
+//GenNewFuncArgList Generate argument list in NewXXX() function
 func GenNewFuncArgList(tab Table) string {
 	list := make([]string, 0, len(tab.Columns))
 	for _, col := range tab.Columns {
@@ -90,6 +100,7 @@ func GenNewFuncArgList(tab Table) string {
 	return strings.Join(list, ", ")
 }
 
+//GenNewFuncAsignBlock Generate middle variable asign block in NewXXX() function
 func GenNewFuncAsignBlock(tab Table) string {
 	list := make([]string, 0, len(tab.Columns))
 	for _, col := range tab.Columns {
@@ -100,6 +111,7 @@ func GenNewFuncAsignBlock(tab Table) string {
 	return strings.Join(list, ",\n")
 }
 
+//GenNewFunc Generate NewXXX() function
 func GenNewFunc(tab Table) string {
 	return fmt.Sprintf(NewModelFuncTemp,
 		tab.ModelName,
@@ -109,14 +121,17 @@ func GenNewFunc(tab Table) string {
 		GenNewFuncAsignBlock(tab))
 }
 
+//GenAllFunc Generate AllXXX() function
 func GenAllFunc(tab Table, db Database) string {
 	return fmt.Sprintf(AllModelFuncTemp, tab.ModelName, tab.ModelName, db.ObjName, BackQuote(tab.TableName), tab.ModelName, tab.ModelName)
 }
 
+//GenQueryFunc Generate QueryXXX() function
 func GenQueryFunc(tab Table, db Database) string {
 	return fmt.Sprintf(QueryModelFuncTemp, tab.ModelName, tab.ModelName, tab.ModelName, db.ObjName, BackQuote(tab.TableName), tab.ModelName, tab.ModelName)
 }
 
+//GenQueryOneFunc Generate QueryOneXXX() function
 func GenQueryOneFunc(tab Table, db Database) string {
 	return fmt.Sprintf(QueryOneFuncTemp,
 		tab.ModelName,
@@ -127,6 +142,7 @@ func GenQueryOneFunc(tab Table, db Database) string {
 		tab.ModelName)
 }
 
+//GenForeignKeyMethod Generate foreign key relation method
 func GenForeignKeyMethod(fk ForeignKey, srcTab Table, db Database) string {
 	return fmt.Sprintf(ForeignKeyMethodTemp,
 		srcTab.ModelName,
@@ -142,6 +158,7 @@ func GenForeignKeyMethod(fk ForeignKey, srcTab Table, db Database) string {
 		fk.DstTab.ModelName)
 }
 
+//GenReverseForeignKeyStruct Generate reverse foreign key relation method
 func GenReverseForeignKeyStruct(rfk ReverseForeignKey, srcTab Table, db Database) string {
 	return fmt.Sprintf(ReverseForeignKeyStructTypeTemp,
 		srcTab.ModelName,
@@ -150,6 +167,7 @@ func GenReverseForeignKeyStruct(rfk ReverseForeignKey, srcTab Table, db Database
 		rfk.DstTab.ModelName)
 }
 
+//GenReverseForeignKeyAllMethod Generate All() method in reverse foreign key relation struct
 func GenReverseForeignKeyAllMethod(rfk ReverseForeignKey, srcTab Table, db Database) string {
 	return fmt.Sprintf(ReverseForeignKeyAllMethodTemp,
 		rfk.DstTab.ModelName,
@@ -163,6 +181,7 @@ func GenReverseForeignKeyAllMethod(rfk ReverseForeignKey, srcTab Table, db Datab
 		rfk.DstTab.ModelName)
 }
 
+//GenReverseForeignKeyQueryMethod Generate Query() method in reverse foreign key relation struct
 func GenReverseForeignKeyQueryMethod(rfk ReverseForeignKey, srcTab Table, db Database) string {
 	return fmt.Sprintf(ReverseForeignKeyQueryMethodTemp,
 		rfk.DstTab.ModelName,
@@ -177,6 +196,7 @@ func GenReverseForeignKeyQueryMethod(rfk ReverseForeignKey, srcTab Table, db Dat
 		rfk.DstTab.ModelName)
 }
 
+//GenReverseForeignKeyMethod Generate model reverse foreign key relation method
 func GenReverseForeignKeyMethod(rfk ReverseForeignKey, srcTab Table, db Database) string {
 	allMethod := GenReverseForeignKeyAllMethod(rfk, srcTab, db)
 	queryMethod := GenReverseForeignKeyQueryMethod(rfk, srcTab, db)
@@ -192,6 +212,7 @@ func GenReverseForeignKeyMethod(rfk ReverseForeignKey, srcTab Table, db Database
 		queryMethod)
 }
 
+//GenManyToManyStruct Generate many to many relation struct definition
 func GenManyToManyStruct(mtm ManyToMany, srcTab Table, db Database) string {
 	return fmt.Sprintf(ManyToManyStructTypeTemp,
 		srcTab.ModelName,
@@ -204,6 +225,7 @@ func GenManyToManyStruct(mtm ManyToMany, srcTab Table, db Database) string {
 		mtm.DstTab.ModelName)
 }
 
+//GenManyToManyAllMethod Generate All() method in many to many relation struct
 func GenManyToManyAllMethod(mtm ManyToMany, srcTab Table, db Database) string {
 	return fmt.Sprintf(ManyToManyAllMethodTemp,
 		mtm.DstTab.ModelName,
@@ -217,6 +239,7 @@ func GenManyToManyAllMethod(mtm ManyToMany, srcTab Table, db Database) string {
 		mtm.DstTab.ModelName)
 }
 
+//GenManyToManyQueryMethod Generate Query() method in many to many relation struct
 func GenManyToManyQueryMethod(mtm ManyToMany, srcTab Table, db Database) string {
 	return fmt.Sprintf(ManyToManyQueryMethodTemp,
 		mtm.DstTab.ModelName,
@@ -231,6 +254,7 @@ func GenManyToManyQueryMethod(mtm ManyToMany, srcTab Table, db Database) string 
 		mtm.DstTab.ModelName)
 }
 
+//GenManyToManyAddMethod Generate Add() method in many to many relation struct
 func GenManyToManyAddMethod(mtm ManyToMany, tab Table) string {
 	return fmt.Sprintf(ManyToManyAddMethodTemp,
 		mtm.DstTab.ArgName,
@@ -245,6 +269,7 @@ func GenManyToManyAddMethod(mtm ManyToMany, tab Table) string {
 		mtm.DstCol.FieldName)
 }
 
+//GenManyToManyRemoveMethod Generate Remove() method in many to many relation struct
 func GenManyToManyRemoveMethod(mtm ManyToMany, tab Table) string {
 	return fmt.Sprintf(ManyToManyRemoveMethodTemp,
 		mtm.DstTab.ArgName,
@@ -259,6 +284,7 @@ func GenManyToManyRemoveMethod(mtm ManyToMany, tab Table) string {
 		mtm.DstCol.FieldName)
 }
 
+//GenManyToManyMethod Generate model many to many relation method
 func GenManyToManyMethod(mtm ManyToMany, srcTab Table, db Database) string {
 	allMethod := GenManyToManyAllMethod(mtm, srcTab, db)
 	queryMethod := GenManyToManyQueryMethod(mtm, srcTab, db)
@@ -278,40 +304,41 @@ func GenManyToManyMethod(mtm ManyToMany, srcTab Table, db Database) string {
 		removeMethod)
 }
 
-func GenCheckStringBlock(col Column, localModelName string) string {
-	return fmt.Sprintf(ModelCheckStringBlockTemp, localModelName, col.FieldName, BackQuote(col.ColumnName), localModelName, col.FieldName)
-}
+// func GenCheckStringBlock(col Column, localModelName string) string {
+// 	return fmt.Sprintf(ModelCheckStringBlockTemp, localModelName, col.FieldName, BackQuote(col.ColumnName), localModelName, col.FieldName)
+// }
 
-func GenCheckIntBlock(col Column, localModelName string) string {
-	return fmt.Sprintf(ModelCheckIntBlockTemp, localModelName, col.FieldName, BackQuote(col.ColumnName), localModelName, col.FieldName)
-}
+// func GenCheckIntBlock(col Column, localModelName string) string {
+// 	return fmt.Sprintf(ModelCheckIntBlockTemp, localModelName, col.FieldName, BackQuote(col.ColumnName), localModelName, col.FieldName)
+// }
 
-func GenCheckFloatBlock(col Column, localModelName string) string {
-	return fmt.Sprintf(ModelCheckFloatBlockTemp, localModelName, col.FieldName, BackQuote(col.ColumnName), localModelName, col.FieldName)
-}
+// func GenCheckFloatBlock(col Column, localModelName string) string {
+// 	return fmt.Sprintf(ModelCheckFloatBlockTemp, localModelName, col.FieldName, BackQuote(col.ColumnName), localModelName, col.FieldName)
+// }
 
-func GenCheckTimeBlock(col Column, localModelName string) string {
-	return fmt.Sprintf(ModelCheckTimeBlockTemp, localModelName, col.FieldName, BackQuote(col.ColumnName), localModelName, col.FieldName)
-}
+// func GenCheckTimeBlock(col Column, localModelName string) string {
+// 	return fmt.Sprintf(ModelCheckTimeBlockTemp, localModelName, col.FieldName, BackQuote(col.ColumnName), localModelName, col.FieldName)
+// }
 
-func GenCheckBoolBlock(col Column, localModelName string) string {
-	return fmt.Sprintf(ModelCheckBoolBlockTemp, localModelName, col.FieldName, BackQuote(col.ColumnName), localModelName, col.FieldName)
-}
+// func GenCheckBoolBlock(col Column, localModelName string) string {
+// 	return fmt.Sprintf(ModelCheckBoolBlockTemp, localModelName, col.FieldName, BackQuote(col.ColumnName), localModelName, col.FieldName)
+// }
 
-func GenInsertSQL(tab Table) string {
-	return fmt.Sprintf(InsertSQLTemp, BackQuote(tab.TableName))
-}
+// func GenInsertSQL(tab Table) string {
+// 	return fmt.Sprintf(InsertSQLTemp, BackQuote(tab.TableName))
+// }
 
-func GenInsertArgsBlock(tab Table) string {
-	list := make([]string, 0, len(tab.Columns))
-	for _, col := range tab.Columns {
-		if !col.AutoIncrement && col.Default != "CURRENT_TIMESTAMP" && col.On != "UPDATE CURRENT_TIMESTAMP" {
-			list = append(list, fmt.Sprintf(ModelInsertArgTemp, col.FieldName))
-		}
-	}
-	return strings.Join(list, ", ")
-}
+// func GenInsertArgsBlock(tab Table) string {
+// 	list := make([]string, 0, len(tab.Columns))
+// 	for _, col := range tab.Columns {
+// 		if !col.AutoIncrement && col.Default != "CURRENT_TIMESTAMP" && col.On != "UPDATE CURRENT_TIMESTAMP" {
+// 			list = append(list, fmt.Sprintf(ModelInsertArgTemp, col.FieldName))
+// 		}
+// 	}
+// 	return strings.Join(list, ", ")
+// }
 
+//GenModelInsertMethod Generate XXX.Insert() method
 func GenModelInsertMethod(tab Table) string {
 	return fmt.Sprintf(ModelInsertMethodTemp,
 		tab.ModelName,
@@ -320,39 +347,17 @@ func GenModelInsertMethod(tab Table) string {
 		tab.AutoIncrement.FieldName)
 }
 
-// func GenUpdateFunc(tab Table, db Database) string {
-// 	list := make([]string, len(tab.Columns))
-// 	for i, col := range tab.Columns {
-// 		if !col.AutoIncrement && col.ColumnName != tab.PrimaryKey.ColumnName {
-// 			switch col.FieldType {
-// 			case "string":
-// 				list[i] = GenCheckStringBlock(col, "m")
-// 			case "int64":
-// 				list[i] = GenCheckIntBlock(col, "m")
-// 			case "float64":
-// 				list[i] = GenCheckFloatBlock(col, "m")
-// 			case "time.Time":
-// 				list[i] = GenCheckTimeBlock(col, "m")
-// 			case "bool":
-// 				list[i] = GenCheckBoolBlock(col, "m")
-
-// 			}
+// func GenUpdateArgs(tab Table) string {
+// 	list := make([]string, 0, len(tab.Columns))
+// 	for _, col := range tab.Columns {
+// 		if !col.AutoIncrement && col.Default != "CURRENT_TIMESTAMP" && col.On != "UPDATE CURRENT_TIMESTAMP" {
+// 			list = append(list, fmt.Sprintf(UpdateArgTemp, col.FieldName))
 // 		}
 // 	}
-// 	return fmt.Sprintf(ModelUpdateMethodTemp, tab.ModelName, strings.Join(list, "\n"), db.ObjName, BackQuote(tab.TableName),
-// 		BackQuote(tab.PrimaryKey.ColumnName), tab.PrimaryKey.FieldName)
+// 	return strings.Join(list, ", ")
 // }
 
-func GenUpdateArgs(tab Table) string {
-	list := make([]string, 0, len(tab.Columns))
-	for _, col := range tab.Columns {
-		if !col.AutoIncrement && col.Default != "CURRENT_TIMESTAMP" && col.On != "UPDATE CURRENT_TIMESTAMP" {
-			list = append(list, fmt.Sprintf(UpdateArgTemp, col.FieldName))
-		}
-	}
-	return strings.Join(list, ", ")
-}
-
+//GenModelUpdateMethod Generate XXX.Update() method
 func GenModelUpdateMethod(tab Table) string {
 	return fmt.Sprintf(ModelUpdateMethodTemp,
 		tab.ModelName,
@@ -361,6 +366,7 @@ func GenModelUpdateMethod(tab Table) string {
 		tab.ModelName)
 }
 
+//GenModelExistsMethod Generate XXX.Exists() method
 func GenModelExistsMethod(tab Table, db Database) string {
 	return fmt.Sprintf(ModelExistsMethodTemp,
 		tab.ModelName,
@@ -372,22 +378,20 @@ func GenModelExistsMethod(tab Table, db Database) string {
 		tab.PrimaryKey.FieldName)
 }
 
-// func GenInsertOrUpdateMethod(tab Table) string {
-// 	return fmt.Sprintf(ModelInsertOrUpdateMethodTemp, tab.ModelName)
+// func GenInsertOrUpdateArgs(tab Table) string {
+// 	list := make([]string, 0, len(tab.Columns))
+// 	for _, col := range tab.Columns {
+// 		if !col.AutoIncrement && col.Default != "CURRENT_TIMESTAMP" && col.On != "UPDATE CURRENT_TIMESTAMP" {
+// 			list = append(list, fmt.Sprintf(InsertOrUpdateArgTemp, col.FieldName))
+// 		}
+// 	}
+// 	finalList := make([]string, len(list)*2)
+// 	copy(finalList[:len(list)], list)
+// 	copy(finalList[len(list):], list)
+// 	return strings.Join(finalList, ", ")
 // }
 
-func GenInsertOrUpdateArgs(tab Table) string {
-	list := make([]string, 0, len(tab.Columns))
-	for _, col := range tab.Columns {
-		if !col.AutoIncrement && col.Default != "CURRENT_TIMESTAMP" && col.On != "UPDATE CURRENT_TIMESTAMP" {
-			list = append(list, fmt.Sprintf(InsertOrUpdateArgTemp, col.FieldName))
-		}
-	}
-	finalList := make([]string, len(list)*2)
-	copy(finalList[:len(list)], list)
-	copy(finalList[len(list):], list)
-	return strings.Join(finalList, ", ")
-}
+//GenModelInsertOrUpdateMethod Generate XXX.InsertOrUpdate() method
 func GenModelInsertOrUpdateMethod(tab Table) string {
 	return fmt.Sprintf(ModelInsertOrUpdateMethodTemp,
 		tab.ModelName,
@@ -431,6 +435,7 @@ func GenModelInsertOrUpdateMethod(tab Table) string {
 // 	return fmt.Sprintf(ModelDeleteMethodTemp, tab.ModelName, db.ObjName, strings.Join(list, "\n"), cascadeDelete, GenDeleteSQL(tab), tab.PrimaryKey.FieldName)
 // }
 
+//GenModelDeleteMethod Generate XXX.Delete() method
 func GenModelDeleteMethod(tab Table) string {
 	return fmt.Sprintf(ModelDeleteMethodTemp,
 		tab.ModelName,
@@ -438,14 +443,17 @@ func GenModelDeleteMethod(tab Table) string {
 		fmt.Sprintf(DeleteArgTemp, tab.AutoIncrement.FieldName))
 }
 
+//GenNewMiddleTypeBlock Generate new middle type consponsed to field type block
 func GenNewMiddleTypeBlock(col Column) string {
 	return fmt.Sprintf(NewMiddleTypeTemp, col.ArgName, col.MidType)
 }
 
+//GenFromRowsCheckBlock Generate check block in XXXFromRows() function
 func GenFromRowsCheckBlock(col Column) string {
 	return fmt.Sprintf(ModelFromRowsCheckNullBlockTemp, col.ArgName, col.ArgName, col.ArgName)
 }
 
+//GenFromRowsFunc Generate XXXFromRows(sql.Rows) ([]*XXX, error) function
 func GenFromRowsFunc(tab Table) string {
 	midList := make([]string, len(tab.Columns))
 	midNameList := make([]string, len(tab.Columns))
@@ -459,6 +467,7 @@ func GenFromRowsFunc(tab Table) string {
 		tab.ModelName, strings.Join(finalArgList, ", "))
 }
 
+//GenFromRowFunc Generate XXXFromRow(sql.Rows) (*XXX, error) function
 func GenFromRowFunc(tab Table) string {
 	midList := make([]string, len(tab.Columns))
 	midNameList := make([]string, len(tab.Columns))
@@ -472,6 +481,7 @@ func GenFromRowFunc(tab Table) string {
 		tab.ModelName, strings.Join(finalArgList, ", "))
 }
 
+//GenModelCheckMethod Generate XXX.check() method.This method is for excluding AUTO_INCREMTN column and AUTO_TIMESTAMP column from insert and update method
 func GenModelCheckMethod(tab Table) string {
 	list := make([]string, 0, len(tab.Columns))
 	for _, col := range tab.Columns {
@@ -482,30 +492,37 @@ func GenModelCheckMethod(tab Table) string {
 	return fmt.Sprintf(ModelCheckMethodTemp, tab.ModelName, strings.Join(list, "\n"))
 }
 
+//GenInsertStmt Generate insert sql.Stmt declaration
 func GenInsertStmt(tab Table) string {
 	return fmt.Sprintf(InsertStmtTemp, tab.ModelName)
 }
 
+//GenUpdateStmt Generate update sql.Stmt declaration
 func GenUpdateStmt(tab Table) string {
 	return fmt.Sprintf(UpdateStmtTemp, tab.ModelName)
 }
 
+//GenDeleteStmt Generate delete sql.Stmt declaration
 func GenDeleteStmt(tab Table) string {
 	return fmt.Sprintf(DeleteStmtTemp, tab.ModelName)
 }
 
+//GenInsertOrUpdateStmt Generate insert or update sql.Stmt declaration
 func GenInsertOrUpdateStmt(tab Table) string {
 	return fmt.Sprintf(InsertOrUpdateStmtTemp, tab.ModelName)
 }
 
+//GenInsertMidStmt Generate insert into middle table sql.Stmt declaration for many to many relation
 func GenInsertMidStmt(tab Table, mtm ManyToMany) string {
 	return fmt.Sprintf(InsertStmtTemp, tab.ModelName+"To"+mtm.DstTab.ModelName)
 }
 
+//GenManyToManyDeleteStmt Generate delete sql.Stmt declaration for many to many relation
 func GenManyToManyDeleteStmt(mtm ManyToMany, tab Table) string {
 	return fmt.Sprintf(ManyToManyDeleteStmtTemp, tab.ModelName, mtm.DstTab.ModelName)
 }
 
+//GenStmtVar Generate prepared sql.Stmt declaration
 func GenStmtVar(tab Table) string {
 	list := make([]string, 0, 8)
 	list = append(list, GenInsertStmt(tab))
@@ -519,6 +536,7 @@ func GenStmtVar(tab Table) string {
 	return strings.Join(list, "\n")
 }
 
+//GenInsertStmtInitBlock Generate insert sql.Stmt in init function
 func GenInsertStmtInitBlock(tab Table, db Database) string {
 	list := make([]string, 0, len(tab.Columns))
 	for _, col := range tab.Columns {
@@ -534,6 +552,7 @@ func GenInsertStmtInitBlock(tab Table, db Database) string {
 		strings.Trim(strings.Repeat("?, ", len(list)), ", "))
 }
 
+//GenUpdateStmtInitBlock Generate update sql.Stmt in init function
 func GenUpdateStmtInitBlock(tab Table, db Database) string {
 	list := make([]string, 0, len(tab.Columns))
 	for _, col := range tab.Columns {
@@ -549,6 +568,7 @@ func GenUpdateStmtInitBlock(tab Table, db Database) string {
 		BackQuote(tab.AutoIncrement.ColumnName))
 }
 
+//GenDeleteStmtInitBlock Generate delete sql.Stmt in init function
 func GenDeleteStmtInitBlock(tab Table, db Database) string {
 	return fmt.Sprintf(DeleteStmtInitTemp,
 		tab.ModelName,
@@ -557,6 +577,7 @@ func GenDeleteStmtInitBlock(tab Table, db Database) string {
 		BackQuote(tab.AutoIncrement.ColumnName))
 }
 
+//GenInsertOrUpdateStmtInitBlock Generate insert or update sql.Stmt in init function
 func GenInsertOrUpdateStmtInitBlock(tab Table, db Database) string {
 	insertList := make([]string, 0, len(tab.Columns))
 	argList := make([]string, 0, len(tab.Columns))
@@ -578,6 +599,7 @@ func GenInsertOrUpdateStmtInitBlock(tab Table, db Database) string {
 		strings.Join(updateList, ", "))
 }
 
+//GenInsertMidStmtInitBlock Generate insert into middle table sql.Stmt for many to many relation in init function
 func GenInsertMidStmtInitBlock(mtm ManyToMany, tab Table, db Database) string {
 	return fmt.Sprintf(InsertMidStmtInitTemp,
 		tab.ModelName+"To"+mtm.DstTab.ModelName,
@@ -587,6 +609,7 @@ func GenInsertMidStmtInitBlock(mtm ManyToMany, tab Table, db Database) string {
 		BackQuote(mtm.MidRightCol.ColumnName))
 }
 
+//GenManyToManyDeleteStmtInitBlock Generate delete middle table sql.Stmt for many to many relation in init function
 func GenManyToManyDeleteStmtInitBlock(mtm ManyToMany, tab Table, db Database) string {
 	return fmt.Sprintf(ManyToManyDeleteStmtInitTemp,
 		tab.ModelName,
@@ -597,6 +620,7 @@ func GenManyToManyDeleteStmtInitBlock(mtm ManyToMany, tab Table, db Database) st
 		BackQuote(mtm.MidRightCol.ColumnName))
 }
 
+//GenStmtInitBlock Generate sql.Stmt init block in init function
 func GenStmtInitBlock(tab Table, db Database) string {
 	list := make([]string, 0, 8)
 	list = append(list, GenInsertStmtInitBlock(tab, db))
@@ -610,6 +634,7 @@ func GenStmtInitBlock(tab Table, db Database) string {
 	return strings.Join(list, "\n")
 }
 
+//GenStmtArgNilToDefault Generate block for replacing nil argument to default value in insert or update method when not null column value is nil
 func GenStmtArgNilToDefault(col Column) string {
 	var value interface{}
 	var err error
@@ -635,12 +660,12 @@ func GenStmtArgNilToDefault(col Column) string {
 	return fmt.Sprintf(StmtArgNilToDefaultTemp, col.FieldName, value, col.FieldName)
 }
 
+//GenStmtArgNilToDefaultBlock Generate block to replacing nil arguments to default value
 func GenStmtArgNilToDefaultBlock(tab Table) string {
 	list := make([]string, 0, len(tab.Columns))
 	for _, col := range tab.Columns {
 		if !col.AutoIncrement && col.Default != "CURRENT_TIMESTAMP" && col.On != "UPDATE CURRENT_TIMESTAMP" {
 			if !col.Nullable && col.Default != "" {
-				// list = append(list, fmt.Sprintf(StmtArgNilToDefaultTemp, col.FieldName))
 				list = append(list, GenStmtArgNilToDefault(col))
 			} else {
 				list = append(list, fmt.Sprintf(StmtArgTemp, col.FieldName))
@@ -650,10 +675,12 @@ func GenStmtArgNilToDefaultBlock(tab Table) string {
 	return fmt.Sprintf(StmtArgNilToDefaultBlockTemp, len(list), strings.Join(list, "\n"))
 }
 
+//GenModelListType Generate XXXList struct definition
 func GenModelListType(tab Table) string {
 	return fmt.Sprintf(ModelListTypeTemp, tab.ModelName, tab.ModelName)
 }
 
+//GenModelCompareMethod Generate field compare method for sort function
 func GenModelCompareMethod(col Column) string {
 	var temp string
 	switch col.FieldType {
@@ -671,6 +698,7 @@ func GenModelCompareMethod(col Column) string {
 	return fmt.Sprintf(temp, col.FieldName, col.FieldName, col.FieldName, col.FieldName, col.FieldName)
 }
 
+//GenModelSortMethodsStructType Generate model sort struct
 func GenModelSortMethodsStructType(tab Table) string {
 	list := make([]string, len(tab.Columns))
 	for i, col := range tab.Columns {
@@ -679,6 +707,7 @@ func GenModelSortMethodsStructType(tab Table) string {
 	return fmt.Sprintf(ModelSortMethodsStructTypeTemp, tab.ModelName, strings.Join(list, "\n"))
 }
 
+//GenModelSortMethodsFunc Generate model sort method
 func GenModelSortMethodsFunc(tab Table) string {
 	list := make([]string, len(tab.Columns))
 	for i, col := range tab.Columns {
@@ -687,18 +716,22 @@ func GenModelSortMethodsFunc(tab Table) string {
 	return fmt.Sprintf(ModelSortMethodsStructFuncTemp, tab.ModelName, tab.ModelName, tab.ModelName, strings.Join(list, "\n"))
 }
 
+//GenModelListLenMethod Generate XXXList.Len() method
 func GenModelListLenMethod(tab Table) string {
 	return fmt.Sprintf(ModelListLenMethodTemp, tab.ModelName)
 }
 
+//GenModelListSwapMethod Generate XXXList.Swap() method
 func GenModelListSwapMethod(tab Table) string {
 	return fmt.Sprintf(ModelListSwapMethodTemp, tab.ModelName)
 }
 
+//GenModelListLessMethod Generate XXXList.Less() method
 func GenModelListLessMethod(tab Table) string {
 	return fmt.Sprintf(ModelListLessMethodTemp, tab.ModelName)
 }
 
+//GenModelSortFuncSwitchBlock Generate XXXSortBy() switch block
 func GenModelSortFuncSwitchBlock(col Column, tab Table) string {
 	return fmt.Sprintf(ModelSortFuncSwitchBlockTemp,
 		col.FieldName,
@@ -707,6 +740,7 @@ func GenModelSortFuncSwitchBlock(col Column, tab Table) string {
 		col.FieldName)
 }
 
+//GenModelSortFunc Generate XXXSortBy() function
 func GenModelSortFunc(tab Table) string {
 	list := make([]string, len(tab.Columns))
 	for i, col := range tab.Columns {
@@ -720,9 +754,11 @@ func GenModelSortFunc(tab Table) string {
 		len(tab.Columns),
 		tab.ArgName,
 		strings.Join(list, "\n"),
+		tab.ArgName,
 		tab.ArgName)
 }
 
+//Gen Generate database definition
 func Gen(db Database, outName string) error {
 	buf := bytes.NewBuffer([]byte{})
 	buf.WriteString(GenPackage(db.Package) + "\n\n")

@@ -9,8 +9,10 @@ import (
 	"github.com/go-sql-driver/mysql"
 )
 
+//UniqueKey *Column slice for unique keys
 type UniqueKey []*Column
 
+//Column define column
 type Column struct {
 	FieldName     string
 	FieldType     string
@@ -25,6 +27,7 @@ type Column struct {
 	On            string
 }
 
+//Table define table
 type Table struct {
 	Columns            []Column
 	ModelName          string
@@ -40,6 +43,7 @@ type Table struct {
 	UniqueKeys         []UniqueKey
 }
 
+//Database define database
 type Database struct {
 	Package      string
 	ObjName      string
@@ -51,6 +55,7 @@ type Database struct {
 	MidTables    []Table
 }
 
+//CreateTableIfNotExists create table by table struct which is not exist in database
 func (db *Database) CreateTableIfNotExists(tab Table) error {
 	conn, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s)/%s", db.Username, db.Password, db.Address, db.DatabaseName))
 	if err != nil {
@@ -82,7 +87,7 @@ func (db *Database) CreateTableIfNotExists(tab Table) error {
 	uniqueList := make([]string, 0, len(tab.UniqueKeys))
 	for _, uni := range tab.UniqueKeys {
 		bqList := make([]string, len(uni))
-		for i, _ := range uni {
+		for i := range uni {
 			bqList[i] = BackQuote(string(uni[i].ColumnName))
 		}
 		ukColList := make([]string, len(uni))
@@ -101,6 +106,7 @@ func (db *Database) CreateTableIfNotExists(tab Table) error {
 	return err
 }
 
+//AddForeignKeyConstraint add foreign key constraint to table
 func (db *Database) AddForeignKeyConstraint() error {
 	conn, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s)/%s", db.Username, db.Password, db.Address, db.DatabaseName))
 	if err != nil {

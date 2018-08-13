@@ -11,18 +11,22 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 )
 
+//ForeignKey define a foreign key relation
 type ForeignKey struct {
 	SrcCol *Column
 	DstCol *Column
 	DstTab *Table
 }
 
+//ReverseForeignKey define a reverse foreign key relation. Note: Database parser will automatic define ReverseForeignKey correspond to source table
+//Foreignkey in destination table, you should not define it in database definition file manually
 type ReverseForeignKey struct {
 	SrcCol *Column
 	DstCol *Column
 	DstTab *Table
 }
 
+//ManyToMany define a many to many relation
 type ManyToMany struct {
 	SrcCol      *Column
 	MidLeftCol  *Column
@@ -32,18 +36,21 @@ type ManyToMany struct {
 	DstTab      *Table
 }
 
+//ForeignKeyInfo intermediate struct for parse foreign key relation definition
 type ForeignKeyInfo struct {
 	SrcColName string
 	DstColName string
 	DstTabName string
 }
 
+//ManyToManyInfo intermediate struct for parse many to many relation definition
 type ManyToManyInfo struct {
 	SrcColName string
 	DstColName string
 	DstTabName string
 }
 
+//GoMidMap intermediate table for many to many relation
 var GoMidMap = map[string]string{
 	"int":    "Int",
 	"float":  "Float",
@@ -52,14 +59,15 @@ var GoMidMap = map[string]string{
 	"time":   "Time",
 }
 
-var GoArgMap = map[string]string{
-	"int64":     "complex128",
-	"float64":   "complex128",
-	"string":    "[]byte",
-	"bool":      "int",
-	"time.Time": "time.Time",
-}
+// var GoArgMap = map[string]string{
+// 	"int64":     "complex128",
+// 	"float64":   "complex128",
+// 	"string":    "[]byte",
+// 	"bool":      "int",
+// 	"time.Time": "time.Time",
+// }
 
+//MySqlGoMap map MySQL type to go type
 var MySqlGoMap = map[string]string{
 	"INT":       "int64",
 	"FLOAT":     "float64",
@@ -71,6 +79,7 @@ var MySqlGoMap = map[string]string{
 	"TEXT":      "string",
 }
 
+//MySqlMidMap map MySQL type to middle type
 var MySqlMidMap = map[string]string{
 	"INT":       "Int",
 	"FLOAT":     "Float",
@@ -82,21 +91,52 @@ var MySqlMidMap = map[string]string{
 	"TEXT":      "String",
 }
 
+//PackageRe regexp pattern for finding package name
 var PackageRe = regexp.MustCompile(`package\s*(\w+?);`)
+
+//UsernameRe regexp pattern for finding database server username
 var UsernameRe = regexp.MustCompile(`@Username\s*=\s*"(\w+?)";`)
+
+//PasswordRe regexp pattern for finding database server password
 var PasswordRe = regexp.MustCompile(`@Password\s*=\s*"(\w+?)";`)
+
+//AddressRe regexp pattern for finding database server address
 var AddressRe = regexp.MustCompile(`@Address\s*=\s*"(.*?)";`)
+
+//NameRe regexp pattern for finding database name
 var NameRe = regexp.MustCompile(`@Name\s*=\s*"(\w+?)";`)
+
+//TableRe regexp pattern for finding table definition
 var TableRe = regexp.MustCompile(`(?ms)Table\s+(\w+)\s+{(.+?)};`)
+
+//ColumnRe regexp pattern for finding column definition in table
 var ColumnRe = regexp.MustCompile(`Column\s+(\w+)\s+([\w\(\)]+)(.*?),`)
+
+//NullableRe regexp pattern for finding nullable attribute in column
 var NullableRe = regexp.MustCompile(`NOT NULL`)
+
+//DefaultRe regexp pattern for finding default attribute in column
 var DefaultRe = regexp.MustCompile(`DEFAULT\s+(['"].*['"]|[^\s]+)`)
+
+//AutoIncrementRe regexp pattern for finding auto incremtnt attribute in column
 var AutoIncrementRe = regexp.MustCompile(`AUTO_INCREMENT`)
+
+//UniqueRe regexp pattern for finding unique attribute in column
 var UniqueRe = regexp.MustCompile(`UNIQUE`)
+
+//ForeignKeyRe regexp pattern for finding foreign key relation definition in table
 var ForeignKeyRe = regexp.MustCompile(`ForeignKey\s+(\w+)\s+(\w+)\s+(\w+),`)
+
+//ManyToManyRe regexp pattern for finding many to many relation definition in table
 var ManyToManyRe = regexp.MustCompile(`ManyToMany\s+(\w+)\s+(\w+)\s+(\w+),`)
+
+//PrimaryKeyRe regexp pattern for finding primary key column in table
 var PrimaryKeyRe = regexp.MustCompile(`PRIMARY KEY\s+(.*?),`)
+
+//UniqueKeyRe regexp pattern for finding unique key columns in table
 var UniqueKeyRe = regexp.MustCompile(`UNIQUE KEY\s+\((.*?)\),`)
+
+//OnRe regexp pattern for finding on condition in table
 var OnRe = regexp.MustCompile(`ON\s+(.*)`)
 
 func findPackage(s string) (string, error) {
@@ -175,6 +215,7 @@ func findAutoIncrement(s string) []string {
 	return AutoIncrementRe.FindStringSubmatch(s)
 }
 
+//ParseDatabase parse database definition file and generate database info struct
 func ParseDatabase(file string) (Database, error) {
 	db := Database{}
 	f, err := os.Open(file)
@@ -224,7 +265,7 @@ func ParseDatabase(file string) (Database, error) {
 		}
 		db.Tables = append(db.Tables, table)
 	}
-	for i, _ := range db.Tables {
+	for i := range db.Tables {
 		for _, info := range db.Tables[i].ForeignKeyInfos {
 			err := parseForeignKey(info, &db.Tables[i], &db)
 			if err != nil {
@@ -279,7 +320,7 @@ func parseTable(t []string, db Database) (Table, error) {
 	if err != nil {
 		return table, err
 	}
-	for i, _ := range table.Columns {
+	for i := range table.Columns {
 		if table.Columns[i].ColumnName == primaryKey[1] {
 			table.PrimaryKey = &table.Columns[i]
 		}
@@ -287,7 +328,7 @@ func parseTable(t []string, db Database) (Table, error) {
 	if table.PrimaryKey == nil {
 		return table, errors.New("primary key column not exist")
 	}
-	for i, _ := range table.Columns {
+	for i := range table.Columns {
 		if table.Columns[i].AutoIncrement {
 			table.AutoIncrement = &table.Columns[i]
 			break
@@ -323,10 +364,10 @@ func parseForeignKey(info ForeignKeyInfo, tab *Table, db *Database) error {
 	var dstTab *Table
 	var srcCol *Column
 	var dstCol *Column
-	for i, _ := range db.Tables {
+	for i := range db.Tables {
 		if db.Tables[i].TableName == info.DstTabName {
 			dstTab = &db.Tables[i]
-			for j, _ := range db.Tables[i].Columns {
+			for j := range db.Tables[i].Columns {
 				if db.Tables[i].Columns[j].ColumnName == info.DstColName {
 					dstCol = &(db.Tables[i].Columns[j])
 					break
@@ -334,7 +375,7 @@ func parseForeignKey(info ForeignKeyInfo, tab *Table, db *Database) error {
 			}
 		}
 	}
-	for i, _ := range tab.Columns {
+	for i := range tab.Columns {
 		if tab.Columns[i].ColumnName == info.SrcColName {
 			srcCol = &tab.Columns[i]
 			break
@@ -406,7 +447,7 @@ func parseManyToMany(info ManyToManyInfo, tab *Table, db *Database) error {
 	var midLeftCol *Column
 	var midRightCol *Column
 
-	for i, _ := range tab.Columns {
+	for i := range tab.Columns {
 		if tab.Columns[i].ColumnName == info.SrcColName {
 			srcCol = &tab.Columns[i]
 			break
@@ -416,7 +457,7 @@ func parseManyToMany(info ManyToManyInfo, tab *Table, db *Database) error {
 		return errors.New("source column not exists")
 	}
 
-	for i, _ := range db.Tables {
+	for i := range db.Tables {
 		if db.Tables[i].TableName == info.DstTabName {
 			dstTab = &db.Tables[i]
 			break
@@ -426,7 +467,7 @@ func parseManyToMany(info ManyToManyInfo, tab *Table, db *Database) error {
 		return errors.New("destination table not exists")
 	}
 
-	for i, _ := range dstTab.Columns {
+	for i := range dstTab.Columns {
 		if dstTab.Columns[i].ColumnName == info.DstColName {
 			dstCol = &dstTab.Columns[i]
 		}
