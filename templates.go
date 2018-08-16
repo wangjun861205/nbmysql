@@ -690,3 +690,17 @@ const ModelSortFuncTemp = `func %sSortBy(ml []*%s, desc bool, fields ...string) 
 		sort.Sort(%sList)
 	}
 }`
+
+const modelCountStmtDeclareTemp = `var %sCountStmt *sql.Stmt`
+const modelCountStmtInitTemp = `%sCountStmt, err = %s.Prepare("SELECT COUNT(*) FROM %s")
+if err != nil {
+	log.Fatal(err)
+	}`
+const modelCountFuncTemp = `func %sCount() (int64, error) {
+	var count int64
+	err := %sCountStmt.QueryRow().Scan(&count)
+	if err != nil {
+		return -1, err
+	}
+	return count, nil
+}`

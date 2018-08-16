@@ -529,6 +529,7 @@ func GenStmtVar(tab Table) string {
 	list = append(list, GenUpdateStmt(tab))
 	list = append(list, GenDeleteStmt(tab))
 	list = append(list, GenInsertOrUpdateStmt(tab))
+	list = append(list, genModelCountStmtDeclare(tab))
 	for _, mtm := range tab.ManyToManys {
 		list = append(list, GenInsertMidStmt(tab, mtm))
 		list = append(list, GenManyToManyDeleteStmt(mtm, tab))
@@ -627,6 +628,7 @@ func GenStmtInitBlock(tab Table, db Database) string {
 	list = append(list, GenUpdateStmtInitBlock(tab, db))
 	list = append(list, GenDeleteStmtInitBlock(tab, db))
 	list = append(list, GenInsertOrUpdateStmtInitBlock(tab, db))
+	list = append(list, genModelCountStmtInit(tab, db))
 	for _, mtm := range tab.ManyToManys {
 		list = append(list, GenInsertMidStmtInitBlock(mtm, tab, db))
 		list = append(list, GenManyToManyDeleteStmtInitBlock(mtm, tab, db))
@@ -758,6 +760,18 @@ func GenModelSortFunc(tab Table) string {
 		tab.ArgName)
 }
 
+func genModelCountStmtDeclare(tab Table) string {
+	return fmt.Sprintf(modelCountStmtDeclareTemp, tab.ModelName)
+}
+
+func genModelCountStmtInit(tab Table, db Database) string {
+	return fmt.Sprintf(modelCountStmtInitTemp, tab.ModelName, db.ObjName, BackQuote(tab.TableName))
+}
+
+func genModelCountFunc(tab Table) string {
+	return fmt.Sprintf(modelCountFuncTemp, tab.ModelName, tab.ModelName)
+}
+
 //Gen Generate database definition
 func Gen(db Database, outName string) error {
 	buf := bytes.NewBuffer([]byte{})
@@ -796,6 +810,7 @@ func Gen(db Database, outName string) error {
 		buf.WriteString(GenModelInsertOrUpdateMethod(tab) + "\n\n")
 		buf.WriteString(GenModelUpdateMethod(tab) + "\n\n")
 		buf.WriteString(GenModelDeleteMethod(tab) + "\n\n")
+		buf.WriteString(genModelCountFunc(tab) + "\n\n")
 		buf.WriteString(GenFromRowsFunc(tab) + "\n\n")
 		buf.WriteString(GenFromRowFunc(tab) + "\n\n")
 		buf.WriteString(GenModelExistsMethod(tab, db) + "\n\n")
