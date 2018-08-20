@@ -92,55 +92,55 @@ var MySqlMidMap = map[string]string{
 }
 
 //PackageRe regexp pattern for finding package name
-var PackageRe = regexp.MustCompile(`package\s*(\w+?);`)
+var packageRe = regexp.MustCompile(`package\s*(\w+?);`)
 
 //UsernameRe regexp pattern for finding database server username
-var UsernameRe = regexp.MustCompile(`@Username\s*=\s*"(\w+?)";`)
+var usernameRe = regexp.MustCompile(`@Username\s*=\s*"(\w+?)";`)
 
 //PasswordRe regexp pattern for finding database server password
-var PasswordRe = regexp.MustCompile(`@Password\s*=\s*"(\w+?)";`)
+var passwordRe = regexp.MustCompile(`@Password\s*=\s*"(\w+?)";`)
 
 //AddressRe regexp pattern for finding database server address
-var AddressRe = regexp.MustCompile(`@Address\s*=\s*"(.*?)";`)
+var addressRe = regexp.MustCompile(`@Address\s*=\s*"(.*?)";`)
 
 //NameRe regexp pattern for finding database name
-var NameRe = regexp.MustCompile(`@Name\s*=\s*"(\w+?)";`)
+var nameRe = regexp.MustCompile(`@Name\s*=\s*"(\w+?)";`)
 
 //TableRe regexp pattern for finding table definition
-var TableRe = regexp.MustCompile(`(?ms)Table\s+(\w+)\s+{(.+?)};`)
+var tableRe = regexp.MustCompile(`(?ms)Table\s+(\w+)\s+{(.+?)};`)
 
 //ColumnRe regexp pattern for finding column definition in table
-var ColumnRe = regexp.MustCompile(`Column\s+(\w+)\s+([\w\(\)]+)(.*?),`)
+var columnRe = regexp.MustCompile(`Column\s+(\w+)\s+([\w\(\)]+)(.*?),`)
 
 //NullableRe regexp pattern for finding nullable attribute in column
-var NullableRe = regexp.MustCompile(`NOT NULL`)
+var nullableRe = regexp.MustCompile(`NOT NULL`)
 
 //DefaultRe regexp pattern for finding default attribute in column
-var DefaultRe = regexp.MustCompile(`DEFAULT\s+(['"].*['"]|[^\s]+)`)
+var defaultRe = regexp.MustCompile(`DEFAULT\s+(['"].*['"]|[^\s]+)`)
 
 //AutoIncrementRe regexp pattern for finding auto incremtnt attribute in column
-var AutoIncrementRe = regexp.MustCompile(`AUTO_INCREMENT`)
+var autoIncrementRe = regexp.MustCompile(`AUTO_INCREMENT`)
 
 //UniqueRe regexp pattern for finding unique attribute in column
-var UniqueRe = regexp.MustCompile(`UNIQUE`)
+var uniqueRe = regexp.MustCompile(`UNIQUE`)
 
 //ForeignKeyRe regexp pattern for finding foreign key relation definition in table
-var ForeignKeyRe = regexp.MustCompile(`ForeignKey\s+(\w+)\s+(\w+)\s+(\w+),`)
+var foreignKeyRe = regexp.MustCompile(`ForeignKey\s+(\w+)\s+(\w+)\s+(\w+),`)
 
 //ManyToManyRe regexp pattern for finding many to many relation definition in table
-var ManyToManyRe = regexp.MustCompile(`ManyToMany\s+(\w+)\s+(\w+)\s+(\w+),`)
+var manyToManyRe = regexp.MustCompile(`ManyToMany\s+(\w+)\s+(\w+)\s+(\w+),`)
 
 //PrimaryKeyRe regexp pattern for finding primary key column in table
-var PrimaryKeyRe = regexp.MustCompile(`PRIMARY KEY\s+(.*?),`)
+var primaryKeyRe = regexp.MustCompile(`PRIMARY KEY\s+(.*?),`)
 
 //UniqueKeyRe regexp pattern for finding unique key columns in table
-var UniqueKeyRe = regexp.MustCompile(`UNIQUE KEY\s+\((.*?)\),`)
+var uniqueKeyRe = regexp.MustCompile(`UNIQUE KEY\s+\((.*?)\),`)
 
 //OnRe regexp pattern for finding on condition in table
-var OnRe = regexp.MustCompile(`ON\s+(.*)`)
+var onRe = regexp.MustCompile(`ON\s+(.*)`)
 
 func findPackage(s string) (string, error) {
-	pkg := PackageRe.FindStringSubmatch(s)
+	pkg := packageRe.FindStringSubmatch(s)
 	if len(pkg) < 2 {
 		return "", errors.New("no package")
 	}
@@ -148,7 +148,7 @@ func findPackage(s string) (string, error) {
 }
 
 func findUsername(s string) (string, error) {
-	username := UsernameRe.FindStringSubmatch(s)
+	username := usernameRe.FindStringSubmatch(s)
 	if len(username) < 2 {
 		return "", errors.New("no database username")
 	}
@@ -156,7 +156,7 @@ func findUsername(s string) (string, error) {
 }
 
 func findPassword(s string) (string, error) {
-	password := PasswordRe.FindStringSubmatch(s)
+	password := passwordRe.FindStringSubmatch(s)
 	if len(password) < 2 {
 		return "", errors.New("no database password")
 	}
@@ -164,7 +164,7 @@ func findPassword(s string) (string, error) {
 }
 
 func findAddr(s string) (string, error) {
-	addr := AddressRe.FindStringSubmatch(s)
+	addr := addressRe.FindStringSubmatch(s)
 	if len(addr) < 2 {
 		return "", errors.New("no database address")
 	}
@@ -172,7 +172,7 @@ func findAddr(s string) (string, error) {
 }
 
 func findName(s string) (string, error) {
-	name := NameRe.FindStringSubmatch(s)
+	name := nameRe.FindStringSubmatch(s)
 	if len(name) < 2 {
 		return "", errors.New("no database name")
 	}
@@ -180,7 +180,7 @@ func findName(s string) (string, error) {
 }
 
 func findTables(s string) ([][]string, error) {
-	tables := TableRe.FindAllStringSubmatch(s, -1)
+	tables := tableRe.FindAllStringSubmatch(s, -1)
 	if len(tables) == 0 {
 		return nil, errors.New("no table exists")
 	}
@@ -188,7 +188,7 @@ func findTables(s string) ([][]string, error) {
 }
 
 func findColumns(s string) ([][]string, error) {
-	columns := ColumnRe.FindAllStringSubmatch(s, -1)
+	columns := columnRe.FindAllStringSubmatch(s, -1)
 	if len(columns) == 0 {
 		return nil, errors.New("no column exists")
 	}
@@ -196,15 +196,15 @@ func findColumns(s string) ([][]string, error) {
 }
 
 func findForeignKeys(s string) [][]string {
-	return ForeignKeyRe.FindAllStringSubmatch(s, -1)
+	return foreignKeyRe.FindAllStringSubmatch(s, -1)
 }
 
 func findManyToMany(s string) [][]string {
-	return ManyToManyRe.FindAllStringSubmatch(s, -1)
+	return manyToManyRe.FindAllStringSubmatch(s, -1)
 }
 
 func findPrimaryKey(s string) ([]string, error) {
-	primaryKey := PrimaryKeyRe.FindStringSubmatch(s)
+	primaryKey := primaryKeyRe.FindStringSubmatch(s)
 	if len(primaryKey) == 0 {
 		return nil, errors.New("no primary key")
 	}
@@ -212,7 +212,7 @@ func findPrimaryKey(s string) ([]string, error) {
 }
 
 func findAutoIncrement(s string) []string {
-	return AutoIncrementRe.FindStringSubmatch(s)
+	return autoIncrementRe.FindStringSubmatch(s)
 }
 
 //ParseDatabase parse database definition file and generate database info struct
@@ -303,14 +303,14 @@ func parseTable(t []string, db Database) (Table, error) {
 		col.MySqlType = column[2]
 		col.FieldType = MySqlGoMap[RmParenthesis(column[2])]
 		col.MidType = MySqlMidMap[RmParenthesis(column[2])]
-		col.Nullable = !NullableRe.MatchString(column[3])
-		col.AutoIncrement = AutoIncrementRe.MatchString(column[3])
-		col.Unique = UniqueRe.MatchString(column[3])
-		def := DefaultRe.FindStringSubmatch(column[3])
+		col.Nullable = !nullableRe.MatchString(column[3])
+		col.AutoIncrement = autoIncrementRe.MatchString(column[3])
+		col.Unique = uniqueRe.MatchString(column[3])
+		def := defaultRe.FindStringSubmatch(column[3])
 		if len(def) > 0 {
 			col.Default = def[1]
 		}
-		on := OnRe.FindStringSubmatch(column[3])
+		on := onRe.FindStringSubmatch(column[3])
 		if len(on) > 0 {
 			col.On = on[1]
 		}
@@ -518,7 +518,7 @@ func parseManyToMany(info ManyToManyInfo, tab *Table, db *Database) error {
 }
 
 func parseUniqueKeys(s string, tab *Table) ([]UniqueKey, error) {
-	l := UniqueKeyRe.FindAllStringSubmatch(s, -1)
+	l := uniqueKeyRe.FindAllStringSubmatch(s, -1)
 	ukList := make([]UniqueKey, len(l))
 	for i, uk := range l {
 		colList := strings.Split(uk[1], ",")
