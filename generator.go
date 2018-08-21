@@ -12,30 +12,45 @@ import (
 	"github.com/wangjun861205/nbfmt"
 )
 
-type genInfo struct {
-	column   Column
-	table    Table
-	database Database
-}
-
 //genPackage generate package statement
 func genPackage(pkg string) string {
-	return fmt.Sprintf(packageTemp, pkg)
+	s, err := nbfmt.Fmt(packageTemp, map[string]interface{}{"Package": pkg})
+	if err != nil {
+		fmt.Println("error: genPackage() failed")
+		log.Fatal(err)
+	}
+	return s
 }
 
 //genDb generate database object declare statement
 func genDb(db Database) string {
-	return fmt.Sprintf(dbTemp, db.ObjName)
+	s, err := nbfmt.Fmt(dbTemp, map[string]interface{}{"Database": db})
+	if err != nil {
+		fmt.Println("error: genDb() failed")
+		log.Fatal(err)
+	}
+	return s
 }
 
 //genInitFunc generate init function
 func genInitFunc(db Database, stmtInit string) string {
-	return fmt.Sprintf(initFuncTemp, db.Username, db.Password, db.Address, db.DatabaseName, db.ObjName, stmtInit)
+	s, err := nbfmt.Fmt(initFuncTemp, map[string]interface{}{"Database": db, "Block": stmtInit})
+	if err != nil {
+		fmt.Println("error: genInitFunc() failed")
+		log.Fatal(err)
+	}
+	return s
 }
 
 //genMapElemBlock generate map element
 func genMapElemBlock(col Column) string {
-	return fmt.Sprintf(mapElemTemp, "@"+col.FieldName, BackQuote(col.ColumnName))
+	s, err := nbfmt.Fmt(mapElemTemp, map[string]interface{}{"Column": col})
+	if err != nil {
+		fmt.Println("error: genMapElemBlock() failed")
+		log.Fatal(err)
+	}
+	return s
+
 }
 
 //genQueryFieldMapBlock generate a map for mapping filed name to column name in where clause in query
@@ -44,12 +59,22 @@ func genQueryFieldMapBlock(tab Table) string {
 	for i, col := range tab.Columns {
 		elemList[i] = genMapElemBlock(col)
 	}
-	return fmt.Sprintf(queryFieldMapTemp, tab.ModelName, strings.Join(elemList, "\n"))
+	s, err := nbfmt.Fmt(queryFieldMapTemp, map[string]interface{}{"Table": tab, "Block": strings.Join(elemList, "\n")})
+	if err != nil {
+		fmt.Println("error: genQueryFialedMapBlock() failed")
+		log.Fatal(err)
+	}
+	return s
 }
 
 //genField generate field definition in model struct
 func genField(col Column) string {
-	return fmt.Sprintf(fieldTemp, col.FieldName, col.FieldType)
+	s, err := nbfmt.Fmt(fieldTemp, map[string]interface{}{"Column": col})
+	if err != nil {
+		fmt.Println("error: genField() failed")
+		log.Fatal(err)
+	}
+	return s
 }
 
 //genModel generate model defination
@@ -58,43 +83,51 @@ func genModel(tab Table) string {
 	for i, col := range tab.Columns {
 		list[i] = genField(col)
 	}
-	return fmt.Sprintf(modelTemp, tab.ModelName, strings.Join(list, "\n"))
+	s, err := nbfmt.Fmt(modelTemp, map[string]interface{}{"Table": tab, "Block": strings.Join(list, "\n")})
+	if err != nil {
+		fmt.Println("error: genModel() failed")
+		log.Fatal(err)
+	}
+	return s
 }
 
 //genModelGetFieldMethod generate model get xxx field value method
 func genModelGetFieldMethod(col Column, tab Table) string {
-	return fmt.Sprintf(modelGetFieldMethodTemp,
-		tab.ModelName,
-		col.FieldName,
-		col.FieldType,
-		col.FieldName,
-		func() string {
-			var s string
-			switch col.FieldType {
-			case "int64":
-				s = "0"
-			case "float64":
-				s = "0.0"
-			case "string":
-				s = `""`
-			case "bool":
-				s = "false"
-			case "time.Time":
-				s = "time.Time{}"
-			}
-			return s
-		}(),
-		col.FieldName)
+	var zeroFunc = func() string {
+		var s string
+		switch col.FieldType {
+		case "int64":
+			s = "0"
+		case "float64":
+			s = "0.0"
+		case "string":
+			s = `""`
+		case "bool":
+			s = "false"
+		case "time.Time":
+			s = "time.Time{}"
+		}
+		return s
+	}
+	s, err := nbfmt.Fmt(modelGetFieldMethodTemp, map[string]interface{}{
+		"Table":     tab,
+		"Column":    col,
+		"ZeroValue": zeroFunc()})
+	if err != nil {
+		fmt.Println("error: genModelGetFieldMethod() failded")
+		log.Fatal(err)
+	}
+	return s
 }
 
 //genModelSetFieldMethod generate model set xxx field value method
 func genModelSetFieldMethod(col Column, tab Table) string {
-	return fmt.Sprintf(modelSetFieldMethodTemp,
-		tab.ModelName,
-		col.FieldName,
-		col.FieldType,
-		col.FieldName,
-		col.FieldName)
+	s, err := nbfmt.Fmt(modelSetFieldMethodTemp, map[string]interface{}{"Table": tab, "Column": col})
+	if err != nil {
+		fmt.Println("error: genModelSetFieldMethod() failed")
+		log.Fatal(err)
+	}
+	return s
 }
 
 //genNewFuncArgList generate argument list in NewXXX() function
@@ -102,7 +135,12 @@ func genNewFuncArgList(tab Table) string {
 	list := make([]string, 0, len(tab.Columns))
 	for _, col := range tab.Columns {
 		if !col.AutoIncrement && col.Default != "CURRENT_TIMESTAMP" && col.On != "UPDATE CURRENT_TIMESTAMP" {
-			list = append(list, fmt.Sprintf(funcArgTemp, col.ArgName, "*"+col.FieldType))
+			s, err := nbfmt.Fmt(funcArgTemp, map[string]interface{}{"Column": col})
+			if err != nil {
+				fmt.Println("error: funcArgTemp format failed")
+				log.Fatal(err)
+			}
+			list = append(list, s)
 		}
 	}
 	return strings.Join(list, ", ")
@@ -113,7 +151,12 @@ func genNewFuncAsignBlock(tab Table) string {
 	list := make([]string, 0, len(tab.Columns))
 	for _, col := range tab.Columns {
 		if !col.AutoIncrement && col.Default != "CURRENT_TIMESTAMP" && col.On != "UPDATE CURRENT_TIMESTAMP" {
-			list = append(list, fmt.Sprintf(newModelAsignTemp, col.FieldName, col.ArgName))
+			s, err := nbfmt.Fmt(newModelAsignTemp, map[string]interface{}{"Column": col})
+			if err != nil {
+				fmt.Println("error: newModelAsignTemp format failed")
+				log.Fatal(err)
+			}
+			list = append(list, s)
 		}
 	}
 	return strings.Join(list, ",\n")
@@ -121,175 +164,172 @@ func genNewFuncAsignBlock(tab Table) string {
 
 //genNewFunc generate NewXXX() function
 func genNewFunc(tab Table) string {
-	return fmt.Sprintf(newModelFuncTemp,
-		tab.ModelName,
-		genNewFuncArgList(tab),
-		tab.ModelName,
-		tab.ModelName,
-		genNewFuncAsignBlock(tab))
+	s, err := nbfmt.Fmt(newModelFuncTemp, map[string]interface{}{"Table": tab, "Args": genNewFuncArgList(tab), "Asigns": genNewFuncAsignBlock(tab)})
+	if err != nil {
+		fmt.Println("error: genNewFunc() failed")
+		log.Fatal(err)
+	}
+	return s
 }
 
 //genAllFunc generate AllXXX() function
 func genAllFunc(tab Table, db Database) string {
-	return fmt.Sprintf(allModelFuncTemp, tab.ModelName, tab.ModelName, db.ObjName, BackQuote(tab.TableName), tab.ModelName, tab.ModelName)
+	s, err := nbfmt.Fmt(allModelFuncTemp, map[string]interface{}{"Table": tab, "Database": db})
+	if err != nil {
+		fmt.Println("error: genAllFunc() failed")
+		log.Fatal(err)
+	}
+	return s
 }
 
 //genQueryFunc generate QueryXXX() function
 func genQueryFunc(tab Table, db Database) string {
-	return fmt.Sprintf(queryModelFuncTemp, tab.ModelName, tab.ModelName, tab.ModelName, db.ObjName, BackQuote(tab.TableName), tab.ModelName, tab.ModelName)
+	s, err := nbfmt.Fmt(queryModelFuncTemp, map[string]interface{}{"Table": tab, "Database": db})
+	if err != nil {
+		fmt.Println("error: genQueryFunc() failed")
+		log.Fatal(err)
+	}
+	return s
 }
 
 //genQueryOneFunc generate QueryOneXXX() function
 func genQueryOneFunc(tab Table, db Database) string {
-	return fmt.Sprintf(queryOneFuncTemp,
-		tab.ModelName,
-		tab.ModelName,
-		tab.ModelName,
-		db.ObjName,
-		BackQuote(tab.TableName),
-		tab.ModelName)
+	s, err := nbfmt.Fmt(queryOneFuncTemp, map[string]interface{}{"Table": tab, "Database": db})
+	if err != nil {
+		fmt.Println("error: genQueryOneFunc() failed")
+		log.Fatal(err)
+	}
+	return s
 }
 
 //genForeignKeyMethod generate foreign key relation method
 func genForeignKeyMethod(fk ForeignKey, srcTab Table, db Database) string {
-	return fmt.Sprintf(foreignKeyMethodTemp,
-		srcTab.ModelName,
-		fk.DstTab.ModelName,
-		fk.SrcCol.FieldName,
-		fk.DstTab.ModelName,
-		fk.SrcCol.FieldName,
-		srcTab.ModelName,
-		fk.SrcCol.FieldName,
-		db.ObjName,
-		fmt.Sprintf(foreignKeyQuerySQLTemp, BackQuote(fk.DstTab.TableName), BackQuote(fk.DstCol.ColumnName)),
-		fk.SrcCol.FieldName,
-		fk.DstTab.ModelName)
+	queryStmt, err := nbfmt.Fmt(foreignKeyQuerySQLTemp, map[string]interface{}{"FK": fk})
+	if err != nil {
+		log.Fatal(err)
+	}
+	s, err := nbfmt.Fmt(foreignKeyMethodTemp, map[string]interface{}{
+		"Table":     srcTab,
+		"FK":        fk,
+		"QueryStmt": queryStmt,
+		"Database":  db})
+	if err != nil {
+		fmt.Println("error: genForeignKeyMethod() failed")
+		log.Fatal(err)
+	}
+	return s
 }
 
 //genReverseForeignKeyStruct generate reverse foreign key relation method
 func genReverseForeignKeyStruct(rfk ReverseForeignKey, srcTab Table, db Database) string {
-	return fmt.Sprintf(reverseForeignKeyStructTypeTemp,
-		srcTab.ModelName,
-		rfk.DstTab.ModelName,
-		rfk.DstTab.ModelName,
-		rfk.DstTab.ModelName)
+	s, err := nbfmt.Fmt(reverseForeignKeyStructTypeTemp, map[string]interface{}{"Table": srcTab, "RFK": rfk})
+	if err != nil {
+		fmt.Println("error: genReverseForeignKeyStruct() failed")
+		log.Fatal(err)
+	}
+	return s
 }
 
 //genReverseForeignKeyAllMethod generate All() method in reverse foreign key relation struct
 func genReverseForeignKeyAllMethod(rfk ReverseForeignKey, srcTab Table, db Database) string {
-	return fmt.Sprintf(reverseForeignKeyAllMethodTemp,
-		rfk.DstTab.ModelName,
-		rfk.SrcCol.FieldName,
-		srcTab.ModelName,
-		rfk.SrcCol.FieldName,
-		db.ObjName,
-		fmt.Sprintf(reverseForeignKeyAllSQLTemp, BackQuote(rfk.DstTab.TableName), BackQuote(rfk.DstCol.ColumnName)),
-		rfk.SrcCol.FieldName,
-		rfk.DstTab.ModelName,
-		rfk.DstTab.ModelName)
+	queryStmt, err := nbfmt.Fmt(reverseForeignKeyAllSQLTemp, map[string]interface{}{"RFK": rfk})
+	if err != nil {
+		fmt.Println("error: reverseForgienKeyAllSQLTemp format failed")
+		log.Fatal(err)
+	}
+	s, err := nbfmt.Fmt(reverseForeignKeyAllMethodTemp, map[string]interface{}{"RFK": rfk, "Table": srcTab, "Database": db, "QueryStmt": queryStmt})
+	if err != nil {
+		fmt.Println("error: genReverseForeignKeyAllMethod() failed")
+		log.Fatal(err)
+	}
+	return s
 }
 
 //genReverseForeignKeyQueryMethod generate Query() method in reverse foreign key relation struct
 func genReverseForeignKeyQueryMethod(rfk ReverseForeignKey, srcTab Table, db Database) string {
-	return fmt.Sprintf(reverseForeignKeyQueryMethodTemp,
-		rfk.DstTab.ModelName,
-		rfk.SrcCol.FieldName,
-		srcTab.ModelName,
-		rfk.SrcCol.FieldName,
-		rfk.DstTab.ModelName,
-		db.ObjName,
-		fmt.Sprintf(reverseForeignKeyQuerySQLTemp, BackQuote(rfk.DstTab.TableName), BackQuote(rfk.DstCol.ColumnName)),
-		rfk.SrcCol.FieldName,
-		rfk.DstTab.ModelName,
-		rfk.DstTab.ModelName)
+	queryStmt, err := nbfmt.Fmt(reverseForeignKeyQuerySQLTemp, map[string]interface{}{"RFK": rfk})
+	if err != nil {
+		fmt.Println("error: reverseForeignKeyQuerySQLTemp format failed")
+		log.Fatal(err)
+	}
+	s, err := nbfmt.Fmt(reverseForeignKeyQueryMethodTemp, map[string]interface{}{"RFK": rfk, "Table": srcTab, "Database": db, "QueryStmt": queryStmt})
+	if err != nil {
+		fmt.Println("error: genReverseForeignKeyQueryMethod() failed")
+		log.Fatal(err)
+	}
+	return s
 }
 
 //genReverseForeignKeyMethod generate model reverse foreign key relation method
 func genReverseForeignKeyMethod(rfk ReverseForeignKey, srcTab Table, db Database) string {
 	allMethod := genReverseForeignKeyAllMethod(rfk, srcTab, db)
 	queryMethod := genReverseForeignKeyQueryMethod(rfk, srcTab, db)
-	return fmt.Sprintf(reverseForeignKeyMethodTemp,
-		srcTab.ModelName,
-		rfk.DstTab.ModelName,
-		rfk.SrcCol.FieldName,
-		srcTab.ModelName,
-		rfk.DstTab.ModelName,
-		srcTab.ModelName,
-		rfk.DstTab.ModelName,
-		allMethod,
-		queryMethod)
+	s, err := nbfmt.Fmt(reverseForeignKeyMethodTemp, map[string]interface{}{"Table": srcTab, "RFK": rfk, "AllMethod": allMethod, "QueryMethod": queryMethod, "Database": db})
+	if err != nil {
+		fmt.Println("error: genReverseForeignKeyMethod() failed")
+		log.Fatal(err)
+	}
+	return s
 }
 
 //genManyToManyStruct generate many to many relation struct definition
 func genManyToManyStruct(mtm ManyToMany, srcTab Table, db Database) string {
-	return fmt.Sprintf(manyToManyStructTypeTemp,
-		srcTab.ModelName,
-		mtm.DstTab.ModelName,
-		mtm.DstTab.ModelName,
-		mtm.DstTab.ModelName,
-		mtm.DstTab.ArgName,
-		mtm.DstTab.ModelName,
-		mtm.DstTab.ArgName,
-		mtm.DstTab.ModelName)
+	s, err := nbfmt.Fmt(manyToManyStructTypeTemp, map[string]interface{}{"Table": srcTab, "MTM": mtm})
+	if err != nil {
+		fmt.Println("error: genManyToManyStruct() failed")
+		log.Fatal(err)
+	}
+	return s
 }
 
 //genManyToManyAllMethod generate All() method in many to many relation struct
 func genManyToManyAllMethod(mtm ManyToMany, srcTab Table, db Database) string {
-	return fmt.Sprintf(manyToManyAllMethodTemp,
-		mtm.DstTab.ModelName,
-		db.ObjName,
-		fmt.Sprintf(manyToManyAllSQLTemp, BackQuote(mtm.DstTab.TableName), BackQuote(srcTab.TableName), BackQuote(mtm.MidTab.TableName),
-			BackQuote(srcTab.TableName), BackQuote(mtm.SrcCol.ColumnName), BackQuote(mtm.MidTab.TableName), BackQuote(mtm.MidLeftCol.ColumnName),
-			BackQuote(mtm.DstTab.TableName), BackQuote(mtm.MidTab.TableName), BackQuote(mtm.MidRightCol.ColumnName), BackQuote(mtm.DstTab.TableName),
-			BackQuote(mtm.DstCol.ColumnName), BackQuote(srcTab.TableName), BackQuote(mtm.SrcCol.ColumnName)),
-		mtm.SrcCol.FieldName,
-		mtm.DstTab.ModelName,
-		mtm.DstTab.ModelName)
+	queryStmt, err := nbfmt.Fmt(manyToManyAllSQLTemp, map[string]interface{}{"MTM": mtm, "Table": srcTab})
+	if err != nil {
+		fmt.Println("error: manyToManyAllSQLTemp format failed")
+		log.Fatal(err)
+	}
+	s, err := nbfmt.Fmt(manyToManyAllMethodTemp, map[string]interface{}{"MTM": mtm, "Database": db, "QueryStmt": queryStmt})
+	if err != nil {
+		fmt.Println("error: genManyToManyAllMethod() failed")
+		log.Fatal(err)
+	}
+	return s
 }
 
 //genManyToManyQueryMethod generate Query() method in many to many relation struct
 func genManyToManyQueryMethod(mtm ManyToMany, srcTab Table, db Database) string {
-	return fmt.Sprintf(manyToManyQueryMethodTemp,
-		mtm.DstTab.ModelName,
-		mtm.DstTab.ModelName,
-		db.ObjName,
-		fmt.Sprintf(manyToManyQuerySQLTemp, BackQuote(mtm.DstTab.TableName), BackQuote(srcTab.TableName), BackQuote(mtm.MidTab.TableName),
-			BackQuote(srcTab.TableName), BackQuote(mtm.SrcCol.ColumnName), BackQuote(mtm.MidTab.TableName), BackQuote(mtm.MidLeftCol.ColumnName),
-			BackQuote(mtm.DstTab.TableName), BackQuote(mtm.MidTab.TableName), BackQuote(mtm.MidRightCol.ColumnName), BackQuote(mtm.DstTab.TableName),
-			BackQuote(mtm.DstCol.ColumnName), BackQuote(srcTab.TableName), BackQuote(mtm.SrcCol.ColumnName)),
-		mtm.SrcCol.FieldName,
-		mtm.DstTab.ModelName,
-		mtm.DstTab.ModelName)
+	queryStmt, err := nbfmt.Fmt(manyToManyQuerySQLTemp, map[string]interface{}{"Table": srcTab, "MTM": mtm})
+	if err != nil {
+		fmt.Println("error: manyToManyQuerySQLTemp format failed")
+		log.Fatal(err)
+	}
+	s, err := nbfmt.Fmt(manyToManyQueryMethodTemp, map[string]interface{}{"MTM": mtm, "Database": db, "QueryStmt": queryStmt})
+	if err != nil {
+		fmt.Println("error: genManyToManyQueryMethod() failed")
+		log.Fatal(err)
+	}
+	return s
 }
 
 //genManyToManyAddMethod generate Add() method in many to many relation struct
 func genManyToManyAddMethod(mtm ManyToMany, tab Table) string {
-	return fmt.Sprintf(manyToManyAddMethodTemp,
-		mtm.DstTab.ArgName,
-		mtm.DstTab.ModelName,
-		tab.ModelName,
-		mtm.DstTab.ArgName,
-		mtm.DstTab.ModelName,
-		tab.ModelName,
-		mtm.DstTab.ModelName,
-		mtm.SrcCol.FieldName,
-		mtm.DstTab.ArgName,
-		mtm.DstCol.FieldName)
+	s, err := nbfmt.Fmt(manyToManyAddMethodTemp, map[string]interface{}{"Table": tab, "MTM": mtm})
+	if err != nil {
+		fmt.Println("error: genManyToManyAddMethod() failed")
+		log.Fatal(err)
+	}
+	return s
 }
 
 //genManyToManyRemoveMethod generate Remove() method in many to many relation struct
 func genManyToManyRemoveMethod(mtm ManyToMany, tab Table) string {
-	return fmt.Sprintf(manyToManyRemoveMethodTemp,
-		mtm.DstTab.ArgName,
-		mtm.DstTab.ModelName,
-		tab.ModelName,
-		mtm.DstTab.ArgName,
-		mtm.DstTab.ModelName,
-		tab.ModelName,
-		mtm.DstTab.ModelName,
-		mtm.SrcCol.FieldName,
-		mtm.DstTab.ArgName,
-		mtm.DstCol.FieldName)
+	s, err := nbfmt.Fmt(manyToManyRemoveMethodTemp, map[string]interface{}{"MTM": mtm, "Table": tab})
+	if err != nil {
+		fmt.Println("error: genManyToManyRemoveMethod() failed")
+		log.Fatal(err)
+	}
+	return s
 }
 
 //genManyToManyMethod generate model many to many relation method
@@ -298,259 +338,19 @@ func genManyToManyMethod(mtm ManyToMany, srcTab Table, db Database) string {
 	queryMethod := genManyToManyQueryMethod(mtm, srcTab, db)
 	addMethod := genManyToManyAddMethod(mtm, srcTab)
 	removeMethod := genManyToManyRemoveMethod(mtm, srcTab)
-	return fmt.Sprintf(manyToManyMethodTemp,
-		srcTab.ModelName,
-		mtm.DstTab.ModelName,
-		mtm.SrcCol.FieldName,
-		srcTab.ModelName,
-		mtm.DstTab.ModelName,
-		srcTab.ModelName,
-		mtm.DstTab.ModelName,
-		allMethod,
-		queryMethod,
-		addMethod,
-		removeMethod)
-}
-
-//genModelInsertMethod generate XXX.Insert() method
-func genModelInsertMethod(tab Table) string {
-	return fmt.Sprintf(modelInsertMethodTemp,
-		tab.ModelName,
-		genStmtArgNilToDefaultBlock(tab),
-		tab.ModelName,
-		tab.AutoIncrement.FieldName)
-}
-
-//genModelUpdateMethod generate XXX.Update() method
-func genModelUpdateMethod(tab Table) string {
-	return fmt.Sprintf(modelUpdateMethodTemp,
-		tab.ModelName,
-		genStmtArgNilToDefaultBlock(tab),
-		tab.AutoIncrement.FieldName,
-		tab.ModelName)
-}
-
-//genModelExistsMethod generate XXX.Exists() method
-func genModelExistsMethod(tab Table, db Database) string {
-	return fmt.Sprintf(modelExistsMethodTemp,
-		tab.ModelName,
-		tab.PrimaryKey.FieldName,
-		tab.ModelName,
-		tab.PrimaryKey.FieldName,
-		db.ObjName,
-		fmt.Sprintf(queryByPrimaryKeySQLTemp, BackQuote(tab.TableName), BackQuote(tab.PrimaryKey.ColumnName)),
-		tab.PrimaryKey.FieldName)
-}
-
-//genModelInsertOrUpdateMethod generate XXX.InsertOrUpdate() method
-func genModelInsertOrUpdateMethod(tab Table) string {
-	return fmt.Sprintf(modelInsertOrUpdateMethodTemp,
-		tab.ModelName,
-		genStmtArgNilToDefaultBlock(tab),
-		tab.ModelName,
-		tab.AutoIncrement.FieldName,
-	)
-}
-
-//genModelDeleteMethod generate XXX.Delete() method
-func genModelDeleteMethod(tab Table) string {
-	return fmt.Sprintf(modelDeleteMethodTemp,
-		tab.ModelName,
-		tab.ModelName,
-		fmt.Sprintf(deleteArgTemp, tab.AutoIncrement.FieldName))
-}
-
-//genNewMiddleTypeBlock generate new middle type consponsed to field type block
-func genNewMiddleTypeBlock(col Column) string {
-	return fmt.Sprintf(newMiddleTypeTemp, col.ArgName, col.MidType)
-}
-
-//genFromRowsCheckBlock generate check block in XXXFromRows() function
-func genFromRowsCheckBlock(col Column) string {
-	return fmt.Sprintf(modelFromRowsCheckNullBlockTemp, col.ArgName, col.ArgName, col.ArgName)
-}
-
-//genFromRowsFunc generate XXXFromRows(sql.Rows) ([]*XXX, error) function
-func genFromRowsFunc(tab Table) string {
-	midList := make([]string, len(tab.Columns))
-	midNameList := make([]string, len(tab.Columns))
-	finalArgList := make([]string, len(tab.Columns))
-	for i, col := range tab.Columns {
-		midList[i] = genNewMiddleTypeBlock(col)
-		midNameList[i] = "_" + col.ArgName
-		finalArgList[i] = "_" + col.ArgName + ".ToGo()"
+	s, err := nbfmt.Fmt(manyToManyMethodTemp, map[string]interface{}{
+		"Database":     db,
+		"Table":        srcTab,
+		"MTM":          mtm,
+		"AllMethod":    allMethod,
+		"QueryMethod":  queryMethod,
+		"AddMethod":    addMethod,
+		"RemoveMethod": removeMethod})
+	if err != nil {
+		fmt.Println("error: genManyToManyMethod() failed")
+		log.Fatal(err)
 	}
-	return fmt.Sprintf(modelFromRowsFuncTemp, tab.ModelName, tab.ModelName, strings.Join(midList, "\n"), strings.Join(midNameList, ", "),
-		tab.ModelName, strings.Join(finalArgList, ", "))
-}
-
-//genFromRowFunc generate XXXFromRow(sql.Rows) (*XXX, error) function
-func genFromRowFunc(tab Table) string {
-	midList := make([]string, len(tab.Columns))
-	midNameList := make([]string, len(tab.Columns))
-	finalArgList := make([]string, len(tab.Columns))
-	for i, col := range tab.Columns {
-		midList[i] = genNewMiddleTypeBlock(col)
-		midNameList[i] = "_" + col.ArgName
-		finalArgList[i] = "_" + col.ArgName + ".ToGo()"
-	}
-	return fmt.Sprintf(modelFromRowFuncTemp, tab.ModelName, tab.ModelName, strings.Join(midList, "\n"), strings.Join(midNameList, ", "),
-		tab.ModelName, strings.Join(finalArgList, ", "))
-}
-
-//genModelCheckMethod generate XXX.check() method.This method is for excluding AUTO_INCREMTN column and AUTO_TIMESTAMP column from insert and update method
-func genModelCheckMethod(tab Table) string {
-	list := make([]string, 0, len(tab.Columns))
-	for _, col := range tab.Columns {
-		if !col.Nullable && !col.AutoIncrement && col.Default == "" {
-			list = append(list, fmt.Sprintf(fieldCheckNullTemp, col.FieldName, tab.ModelName, col.FieldName))
-		}
-	}
-	return fmt.Sprintf(modelCheckMethodTemp, tab.ModelName, strings.Join(list, "\n"))
-}
-
-//genInsertStmt generate insert sql.Stmt declaration
-func genInsertStmt(tab Table) string {
-	return fmt.Sprintf(insertStmtTemp, tab.ModelName)
-}
-
-//genUpdateStmt generate update sql.Stmt declaration
-func genUpdateStmt(tab Table) string {
-	return fmt.Sprintf(updateStmtTemp, tab.ModelName)
-}
-
-//genDeleteStmt generate delete sql.Stmt declaration
-func genDeleteStmt(tab Table) string {
-	return fmt.Sprintf(deleteStmtTemp, tab.ModelName)
-}
-
-//genInsertOrUpdateStmt generate insert or update sql.Stmt declaration
-func genInsertOrUpdateStmt(tab Table) string {
-	return fmt.Sprintf(insertOrUpdateStmtTemp, tab.ModelName)
-}
-
-//genInsertMidStmt generate insert into middle table sql.Stmt declaration for many to many relation
-func genInsertMidStmt(tab Table, mtm ManyToMany) string {
-	return fmt.Sprintf(insertStmtTemp, tab.ModelName+"To"+mtm.DstTab.ModelName)
-}
-
-//genManyToManyDeleteStmt generate delete sql.Stmt declaration for many to many relation
-func genManyToManyDeleteStmt(mtm ManyToMany, tab Table) string {
-	return fmt.Sprintf(manyToManyDeleteStmtTemp, tab.ModelName, mtm.DstTab.ModelName)
-}
-
-//genStmtVar generate prepared sql.Stmt declaration
-func genStmtVar(tab Table) string {
-	list := make([]string, 0, 8)
-	list = append(list, genInsertStmt(tab))
-	list = append(list, genUpdateStmt(tab))
-	list = append(list, genDeleteStmt(tab))
-	list = append(list, genInsertOrUpdateStmt(tab))
-	list = append(list, genModelCountStmtDeclare(tab))
-	for _, mtm := range tab.ManyToManys {
-		list = append(list, genInsertMidStmt(tab, mtm))
-		list = append(list, genManyToManyDeleteStmt(mtm, tab))
-	}
-	return strings.Join(list, "\n")
-}
-
-//genInsertStmtInitBlock generate insert sql.Stmt in init function
-func genInsertStmtInitBlock(tab Table, db Database) string {
-	list := make([]string, 0, len(tab.Columns))
-	for _, col := range tab.Columns {
-		if !col.AutoIncrement && col.Default != "CURRENT_TIMESTAMP" && col.On != "UPDATE CURRENT_TIMESTAMP" {
-			list = append(list, BackQuote(col.ColumnName))
-		}
-	}
-	return fmt.Sprintf(insertStmtInitTemp,
-		tab.ModelName,
-		db.ObjName,
-		BackQuote(tab.TableName),
-		strings.Join(list, ", "),
-		strings.Trim(strings.Repeat("?, ", len(list)), ", "))
-}
-
-//genUpdateStmtInitBlock generate update sql.Stmt in init function
-func genUpdateStmtInitBlock(tab Table, db Database) string {
-	list := make([]string, 0, len(tab.Columns))
-	for _, col := range tab.Columns {
-		if !col.AutoIncrement && col.Default != "CURRENT_TIMESTAMP" && col.On != "UPDATE CURRENT_TIMESTAMP" {
-			list = append(list, BackQuote(col.ColumnName)+" = ?")
-		}
-	}
-	return fmt.Sprintf(updateStmtInitTemp,
-		tab.ModelName,
-		db.ObjName,
-		BackQuote(tab.TableName),
-		strings.Join(list, ", "),
-		BackQuote(tab.AutoIncrement.ColumnName))
-}
-
-//genDeleteStmtInitBlock generate delete sql.Stmt in init function
-func genDeleteStmtInitBlock(tab Table, db Database) string {
-	return fmt.Sprintf(deleteStmtInitTemp,
-		tab.ModelName,
-		db.ObjName,
-		BackQuote(tab.TableName),
-		BackQuote(tab.AutoIncrement.ColumnName))
-}
-
-//genInsertOrUpdateStmtInitBlock generate insert or update sql.Stmt in init function
-func genInsertOrUpdateStmtInitBlock(tab Table, db Database) string {
-	insertList := make([]string, 0, len(tab.Columns))
-	argList := make([]string, 0, len(tab.Columns))
-	updateList := make([]string, 0, len(tab.Columns))
-	for _, col := range tab.Columns {
-		if !col.AutoIncrement && col.Default != "CURRENT_TIMESTAMP" && col.On != "UPDATE CURRENT_TIMESTAMP" {
-			insertList = append(insertList, BackQuote(col.ColumnName))
-			argList = append(argList, "?")
-			updateList = append(updateList, fmt.Sprintf(updateColumnTemp, BackQuote(col.ColumnName)))
-		}
-	}
-	return fmt.Sprintf(insertOrUpdateStmtInitTemp,
-		tab.ModelName,
-		db.ObjName,
-		BackQuote(tab.TableName),
-		strings.Join(insertList, ", "),
-		strings.Join(argList, ", "),
-		fmt.Sprintf(updateLastInsertIDTemp, BackQuote(tab.AutoIncrement.ColumnName), BackQuote(tab.AutoIncrement.ColumnName)),
-		strings.Join(updateList, ", "))
-}
-
-//genInsertMidStmtInitBlock generate insert into middle table sql.Stmt for many to many relation in init function
-func genInsertMidStmtInitBlock(mtm ManyToMany, tab Table, db Database) string {
-	return fmt.Sprintf(insertMidStmtInitTemp,
-		tab.ModelName+"To"+mtm.DstTab.ModelName,
-		db.ObjName,
-		BackQuote(mtm.MidTab.TableName),
-		BackQuote(mtm.MidLeftCol.ColumnName),
-		BackQuote(mtm.MidRightCol.ColumnName))
-}
-
-//genManyToManyDeleteStmtInitBlock generate delete middle table sql.Stmt for many to many relation in init function
-func genManyToManyDeleteStmtInitBlock(mtm ManyToMany, tab Table, db Database) string {
-	return fmt.Sprintf(manyToManyDeleteStmtInitTemp,
-		tab.ModelName,
-		mtm.DstTab.ModelName,
-		db.ObjName,
-		BackQuote(mtm.MidTab.TableName),
-		BackQuote(mtm.MidLeftCol.ColumnName),
-		BackQuote(mtm.MidRightCol.ColumnName))
-}
-
-//genStmtInitBlock generate sql.Stmt init block in init function
-func genStmtInitBlock(tab Table, db Database) string {
-	list := make([]string, 0, 8)
-	list = append(list, genInsertStmtInitBlock(tab, db))
-	list = append(list, genUpdateStmtInitBlock(tab, db))
-	list = append(list, genDeleteStmtInitBlock(tab, db))
-	list = append(list, genInsertOrUpdateStmtInitBlock(tab, db))
-	list = append(list, genModelCountStmtInit(tab, db))
-	for _, mtm := range tab.ManyToManys {
-		list = append(list, genInsertMidStmtInitBlock(mtm, tab, db))
-		list = append(list, genManyToManyDeleteStmtInitBlock(mtm, tab, db))
-	}
-	return strings.Join(list, "\n")
+	return s
 }
 
 //genStmtArgNilToDefault generate block for replacing nil argument to default value in insert or update method when not null column value is nil
@@ -576,7 +376,12 @@ func genStmtArgNilToDefault(col Column) string {
 	if err != nil {
 		log.Fatal(err)
 	}
-	return fmt.Sprintf(stmtArgNilToDefaultTemp, col.FieldName, value, col.FieldName)
+	s, err := nbfmt.Fmt(stmtArgNilToDefaultTemp, map[string]interface{}{"Column": col, "DefaultValue": value})
+	if err != nil {
+		fmt.Println("error: genStmtArgNilToDefault() failed")
+		log.Fatal(err)
+	}
+	return s
 }
 
 //genStmtArgNilToDefaultBlock generate block to replacing nil arguments to default value
@@ -587,19 +392,348 @@ func genStmtArgNilToDefaultBlock(tab Table) string {
 			if !col.Nullable && col.Default != "" {
 				list = append(list, genStmtArgNilToDefault(col))
 			} else {
-				list = append(list, fmt.Sprintf(stmtArgTemp, col.FieldName))
+				s, err := nbfmt.Fmt(stmtArgTemp, map[string]interface{}{"Column": col})
+				if err != nil {
+					fmt.Println("error: stmtArgTemp format failed")
+					log.Fatal(err)
+				}
+				list = append(list, s)
 			}
 		}
 	}
-	return fmt.Sprintf(stmtArgNilToDefaultBlockTemp, len(list), strings.Join(list, "\n"))
+	s, err := nbfmt.Fmt(stmtArgNilToDefaultBlockTemp, map[string]interface{}{"Length": len(list), "Block": strings.Join(list, "\n")})
+	if err != nil {
+		fmt.Println("error: genStmtArgNilToDefaultBlock() failed")
+		log.Fatal(err)
+	}
+	return s
+}
+
+//genModelInsertMethod generate XXX.Insert() method
+func genModelInsertMethod(tab Table) string {
+	s, err := nbfmt.Fmt(modelInsertMethodTemp, map[string]interface{}{"Table": tab, "Block": genStmtArgNilToDefaultBlock(tab)})
+	if err != nil {
+		fmt.Println("error: genModelInsertMethod() failed")
+		log.Fatal(err)
+	}
+	return s
+}
+
+//genModelUpdateMethod generate XXX.Update() method
+func genModelUpdateMethod(tab Table) string {
+	s, err := nbfmt.Fmt(modelUpdateMethodTemp, map[string]interface{}{"Table": tab, "Block": genStmtArgNilToDefaultBlock(tab)})
+	if err != nil {
+		fmt.Println("error: genModelUpdateMethod() failed")
+		log.Fatal(err)
+	}
+	return s
+}
+
+//genModelInsertOrUpdateMethod generate XXX.InsertOrUpdate() method
+func genModelInsertOrUpdateMethod(tab Table) string {
+	s, err := nbfmt.Fmt(modelInsertOrUpdateMethodTemp, map[string]interface{}{"Table": tab, "Block": genStmtArgNilToDefaultBlock(tab)})
+	if err != nil {
+		fmt.Println("error: genModelInsertOrUpdateMethod() failed")
+		log.Fatal(err)
+	}
+	return s
+}
+
+//genModelDeleteMethod generate XXX.Delete() method
+func genModelDeleteMethod(tab Table) string {
+	s, err := nbfmt.Fmt(modelDeleteMethodTemp, map[string]interface{}{"Table": tab})
+	if err != nil {
+		fmt.Println("error: genModelDeleteMethod() failed")
+		log.Fatal(err)
+	}
+	return s
+}
+
+//genNewMiddleTypeBlock generate new middle type consponsed to field type block
+func genNewMiddleTypeBlock(col Column) string {
+	s, err := nbfmt.Fmt(newMiddleTypeTemp, map[string]interface{}{"Column": col})
+	if err != nil {
+		fmt.Println("error: genNewMiddleTypeBlock() failed")
+		log.Fatal(err)
+	}
+	return s
+}
+
+//genFromRowsFunc generate XXXFromRows(sql.Rows) ([]*XXX, error) function
+func genFromRowsFunc(tab Table) string {
+	midList := make([]string, len(tab.Columns))
+	midNameList := make([]string, len(tab.Columns))
+	finalArgList := make([]string, len(tab.Columns))
+	for i, col := range tab.Columns {
+		midList[i] = genNewMiddleTypeBlock(col)
+		midNameList[i] = "_" + col.ArgName
+		finalArgList[i] = "_" + col.ArgName + ".ToGo()"
+	}
+	s, err := nbfmt.Fmt(modelFromRowsFuncTemp, map[string]interface{}{"Table": tab,
+		"Block":    strings.Join(midList, "\n"),
+		"MidArgs":  strings.Join(midNameList, ", "),
+		"MidToGos": strings.Join(finalArgList, ", ")})
+	if err != nil {
+		fmt.Println("error: genFromRowsFunc() failed")
+		log.Fatal(err)
+	}
+	return s
+}
+
+//genFromRowFunc generate XXXFromRow(sql.Rows) (*XXX, error) function
+func genFromRowFunc(tab Table) string {
+	midList := make([]string, len(tab.Columns))
+	midNameList := make([]string, len(tab.Columns))
+	finalArgList := make([]string, len(tab.Columns))
+	for i, col := range tab.Columns {
+		midList[i] = genNewMiddleTypeBlock(col)
+		midNameList[i] = "_" + col.ArgName
+		finalArgList[i] = "_" + col.ArgName + ".ToGo()"
+	}
+	s, err := nbfmt.Fmt(modelFromRowFuncTemp, map[string]interface{}{
+		"Table":    tab,
+		"Block":    strings.Join(midList, "\n"),
+		"MidArgs":  strings.Join(midNameList, ", "),
+		"MidToGos": strings.Join(finalArgList, ", "),
+	})
+	if err != nil {
+		fmt.Println("error: genFromRowFunc() failed")
+		log.Fatal(err)
+	}
+	return s
+}
+
+//genModelCheckMethod generate XXX.check() method.This method is for excluding AUTO_INCREMTN column and AUTO_TIMESTAMP column from insert and update method
+func genModelCheckMethod(tab Table) string {
+	list := make([]string, 0, len(tab.Columns))
+	for _, col := range tab.Columns {
+		if !col.Nullable && !col.AutoIncrement && col.Default == "" {
+			s, err := nbfmt.Fmt(fieldCheckNullTemp, map[string]interface{}{"Column": col, "Table": tab})
+			if err != nil {
+				fmt.Println("error: fieldCheckNullTemp format failed")
+				log.Fatal(err)
+			}
+			list = append(list, s)
+		}
+	}
+	s, err := nbfmt.Fmt(modelCheckMethodTemp, map[string]interface{}{"Table": tab, "Block": strings.Join(list, "\n")})
+	if err != nil {
+		fmt.Println("error: genModelCheckMethod() failed")
+		log.Fatal(err)
+	}
+	return s
+}
+
+//genInsertStmt generate insert sql.Stmt declaration
+func genInsertStmt(tab Table) string {
+	s, err := nbfmt.Fmt(insertStmtTemp, map[string]interface{}{"Table": tab})
+	if err != nil {
+		fmt.Println("error: genInsertStmt() failed")
+		log.Fatal(err)
+	}
+	return s
+}
+
+//genUpdateStmt generate update sql.Stmt declaration
+func genUpdateStmt(tab Table) string {
+	s, err := nbfmt.Fmt(updateStmtTemp, map[string]interface{}{"Table": tab})
+	if err != nil {
+		fmt.Println("error: genUpdateStmt() failed")
+		log.Fatal(err)
+	}
+	return s
+}
+
+//genDeleteStmt generate delete sql.Stmt declaration
+func genDeleteStmt(tab Table) string {
+	s, err := nbfmt.Fmt(deleteStmtTemp, map[string]interface{}{"Table": tab})
+	if err != nil {
+		fmt.Println("error: genDeleteStmt() failed")
+		log.Fatal(err)
+	}
+	return s
+}
+
+//genInsertOrUpdateStmt generate insert or update sql.Stmt declaration
+func genInsertOrUpdateStmt(tab Table) string {
+	s, err := nbfmt.Fmt(insertOrUpdateStmtTemp, map[string]interface{}{"Table": tab})
+	if err != nil {
+		fmt.Println("error: genInsertOrUpdateStmt() failed")
+		log.Fatal(err)
+	}
+	return s
+}
+
+//genInsertMidStmt generate insert into middle table sql.Stmt declaration for many to many relation
+func genInsertMidStmt(tab Table, mtm ManyToMany) string {
+	s, err := nbfmt.Fmt(insertMidStmtTemp, map[string]interface{}{"Table": tab, "MTM": mtm})
+	if err != nil {
+		fmt.Println("error: genInsertMidStmt() failed")
+		log.Fatal(err)
+	}
+	return s
+}
+
+//genManyToManyDeleteStmt generate delete sql.Stmt declaration for many to many relation
+func genManyToManyDeleteStmt(mtm ManyToMany, tab Table) string {
+	s, err := nbfmt.Fmt(manyToManyDeleteStmtTemp, map[string]interface{}{"Table": tab, "MTM": mtm})
+	if err != nil {
+		fmt.Println("error: genManyToManyDeleteStmt() failed")
+		log.Fatal(err)
+	}
+	return s
+}
+
+//genStmtVar generate prepared sql.Stmt declaration
+func genStmtVar(tab Table) string {
+	list := make([]string, 0, 8)
+	list = append(list, genInsertStmt(tab))
+	list = append(list, genUpdateStmt(tab))
+	list = append(list, genDeleteStmt(tab))
+	list = append(list, genInsertOrUpdateStmt(tab))
+	list = append(list, genModelCountStmtDeclare(tab))
+	for _, mtm := range tab.ManyToManys {
+		list = append(list, genInsertMidStmt(tab, mtm))
+		list = append(list, genManyToManyDeleteStmt(mtm, tab))
+	}
+	return strings.Join(list, "\n")
+}
+
+//genInsertStmtInitBlock generate insert sql.Stmt in init function
+func genInsertStmtInitBlock(tab Table, db Database) string {
+	list := make([]string, 0, len(tab.Columns))
+	for _, col := range tab.Columns {
+		if !col.AutoIncrement && col.Default != "CURRENT_TIMESTAMP" && col.On != "UPDATE CURRENT_TIMESTAMP" {
+			list = append(list, col.ColumnName)
+		}
+	}
+	s, err := nbfmt.Fmt(insertStmtInitTemp, map[string]interface{}{
+		"Table":    tab,
+		"Database": db,
+		"Columns":  strings.Join(list, ", "),
+		"Values":   strings.Trim(strings.Repeat("?, ", len(list)), ", "),
+	})
+	if err != nil {
+		fmt.Println("error: genInsertStmtInitBlock() failed")
+		log.Fatal(err)
+	}
+	return s
+
+}
+
+//genUpdateStmtInitBlock generate update sql.Stmt in init function
+func genUpdateStmtInitBlock(tab Table, db Database) string {
+	list := make([]string, 0, len(tab.Columns))
+	for _, col := range tab.Columns {
+		if !col.AutoIncrement && col.Default != "CURRENT_TIMESTAMP" && col.On != "UPDATE CURRENT_TIMESTAMP" {
+			list = append(list, col.ColumnName+" = ?")
+		}
+	}
+	s, err := nbfmt.Fmt(updateStmtInitTemp, map[string]interface{}{
+		"Table":    tab,
+		"Database": db,
+		"Updates":  strings.Join(list, ", "),
+	})
+	if err != nil {
+		fmt.Println("error: genUpdateStmtInitBlock() failed")
+		log.Fatal(err)
+	}
+	return s
+}
+
+//genDeleteStmtInitBlock generate delete sql.Stmt in init function
+func genDeleteStmtInitBlock(tab Table, db Database) string {
+	s, err := nbfmt.Fmt(deleteStmtInitTemp, map[string]interface{}{"Table": tab, "Database": db})
+	if err != nil {
+		fmt.Println("error: genDeleteStmtInitBlock() failed")
+		log.Fatal(err)
+	}
+	return s
+}
+
+//genInsertOrUpdateStmtInitBlock generate insert or update sql.Stmt in init function
+func genInsertOrUpdateStmtInitBlock(tab Table, db Database) string {
+	insertList := make([]string, 0, len(tab.Columns))
+	argList := make([]string, 0, len(tab.Columns))
+	updateList := make([]string, 0, len(tab.Columns))
+	for _, col := range tab.Columns {
+		if !col.AutoIncrement && col.Default != "CURRENT_TIMESTAMP" && col.On != "UPDATE CURRENT_TIMESTAMP" {
+			insertList = append(insertList, col.ColumnName)
+			argList = append(argList, "?")
+			s, err := nbfmt.Fmt(updateColumnTemp, map[string]interface{}{"Column": col})
+			if err != nil {
+				fmt.Println("error: updateColumnTemp format failed")
+				log.Fatal(err)
+			}
+			updateList = append(updateList, s)
+		}
+	}
+	updateLastInsertId, err := nbfmt.Fmt(updateLastInsertIDTemp, map[string]interface{}{"Table": tab})
+	if err != nil {
+		fmt.Println("error: updateLastInsertIDTemp format failed")
+		log.Fatal(err)
+	}
+	s, err := nbfmt.Fmt(insertOrUpdateStmtInitTemp, map[string]interface{}{
+		"Table":              tab,
+		"Database":           db,
+		"Columns":            strings.Join(insertList, ", "),
+		"Values":             strings.Join(argList, ", "),
+		"UpdateLastInsertID": updateLastInsertId,
+		"Updates":            strings.Join(updateList, ", "),
+	})
+	if err != nil {
+		fmt.Println("error: genInsertOrUpdateStmtInitBlock() failed")
+		log.Fatal(err)
+	}
+	return s
+}
+
+//genInsertMidStmtInitBlock generate insert into middle table sql.Stmt for many to many relation in init function
+func genInsertMidStmtInitBlock(mtm ManyToMany, tab Table, db Database) string {
+	s, err := nbfmt.Fmt(insertMidStmtInitTemp, map[string]interface{}{"Table": tab, "Database": db, "MTM": mtm})
+	if err != nil {
+		fmt.Println("error: genInsertMidStmtInitBlock() failed")
+		log.Fatal(err)
+	}
+	return s
+
+}
+
+//genManyToManyDeleteStmtInitBlock generate delete middle table sql.Stmt for many to many relation in init function
+func genManyToManyDeleteStmtInitBlock(mtm ManyToMany, tab Table, db Database) string {
+	s, err := nbfmt.Fmt(manyToManyDeleteStmtInitTemp, map[string]interface{}{"Table": tab, "MTM": mtm, "Database": db})
+	if err != nil {
+		fmt.Println("error: genManyToManyDeleteStmtInitBlock() failed")
+		log.Fatal(err)
+	}
+	return s
+}
+
+//genStmtInitBlock generate sql.Stmt init block in init function
+func genStmtInitBlock(tab Table, db Database) string {
+	list := make([]string, 0, 8)
+	list = append(list, genInsertStmtInitBlock(tab, db))
+	list = append(list, genUpdateStmtInitBlock(tab, db))
+	list = append(list, genDeleteStmtInitBlock(tab, db))
+	list = append(list, genInsertOrUpdateStmtInitBlock(tab, db))
+	list = append(list, genModelCountStmtInit(tab, db))
+	for _, mtm := range tab.ManyToManys {
+		list = append(list, genInsertMidStmtInitBlock(mtm, tab, db))
+		list = append(list, genManyToManyDeleteStmtInitBlock(mtm, tab, db))
+	}
+	return strings.Join(list, "\n")
 }
 
 //genModelListType generate XXXList struct definition
 func genModelListType(tab Table) string {
-	return fmt.Sprintf(modelListTypeTemp, tab.ModelName, tab.ModelName)
+	s, err := nbfmt.Fmt(modelListTypeTemp, map[string]interface{}{"Table": tab})
+	if err != nil {
+		fmt.Println("error: genModelListType() failed")
+		log.Fatal(err)
+	}
+	return s
 }
 
-//genModelCompareMethod generate field compare method for sort function
 func genModelCompareMethod(col Column) string {
 	var temp string
 	switch col.FieldType {
@@ -614,91 +748,116 @@ func genModelCompareMethod(col Column) string {
 	case "time.Time":
 		temp = modelCompareByTimeMethodTemp
 	}
-	return fmt.Sprintf(temp, col.FieldName, col.FieldName, col.FieldName, col.FieldName, col.FieldName)
-}
-
-//genModelSortMethodsStructType generate model sort struct
-func genModelSortMethodsStructType(tab Table) string {
-	list := make([]string, len(tab.Columns))
-	for i, col := range tab.Columns {
-		list[i] = fmt.Sprintf(modelSortMethodsStructFieldTypeTemp, col.FieldName)
-	}
-	return fmt.Sprintf(modelSortMethodsStructTypeTemp, tab.ModelName, strings.Join(list, "\n"))
-}
-
-//genModelSortMethodsFunc generate model sort method
-func genModelSortMethodsFunc(tab Table) string {
-	list := make([]string, len(tab.Columns))
-	for i, col := range tab.Columns {
-		list[i] = genModelCompareMethod(col)
-	}
-	return fmt.Sprintf(modelSortMethodsStructFuncTemp, tab.ModelName, tab.ModelName, tab.ModelName, strings.Join(list, "\n"))
-}
-
-//genModelListLenMethod generate XXXList.Len() method
-func genModelListLenMethod(tab Table) string {
-	return fmt.Sprintf(modelListLenMethodTemp, tab.ModelName)
-}
-
-//genModelListSwapMethod generate XXXList.Swap() method
-func genModelListSwapMethod(tab Table) string {
-	return fmt.Sprintf(modelListSwapMethodTemp, tab.ModelName)
-}
-
-//genModelListLessMethod generate XXXList.Less() method
-func genModelListLessMethod(tab Table) string {
-	return fmt.Sprintf(modelListLessMethodTemp, tab.ModelName)
-}
-
-//genModelSortFuncSwitchBlock generate XXXSortBy() switch block
-func genModelSortFuncSwitchBlock(col Column, tab Table) string {
-	return fmt.Sprintf(modelSortFuncSwitchBlockTemp,
-		col.FieldName,
-		tab.ArgName,
-		tab.ArgName,
-		col.FieldName)
-}
-
-//genModelSortFunc generate XXXSortBy() function
-func genModelSortFunc(tab Table) string {
-	list := make([]string, len(tab.Columns))
-	for i, col := range tab.Columns {
-		list[i] = genModelSortFuncSwitchBlock(col, tab)
-	}
-	return fmt.Sprintf(modelSortFuncTemp,
-		tab.ModelName,
-		tab.ModelName,
-		tab.ArgName,
-		tab.ModelName,
-		len(tab.Columns),
-		tab.ArgName,
-		strings.Join(list, "\n"),
-		tab.ArgName,
-		tab.ArgName)
-}
-
-func genModelCountStmtDeclare(tab Table) string {
-	return fmt.Sprintf(modelCountStmtDeclareTemp, tab.ModelName)
-}
-
-// func genModelCountStmtInit(tab Table, db Database) string {
-// 	return fmt.Sprintf(modelCountStmtInitTemp, tab.ModelName, db.ObjName, BackQuote(tab.TableName))
-// }
-
-func genModelCountStmtInit(tab Table, db Database) string {
-	s, err := nbfmt.Fmt(modelCountStmtInitTemp, map[string]interface{}{"Table": tab, "Database": db})
+	s, err := nbfmt.Fmt(temp, map[string]interface{}{"Column": col})
 	if err != nil {
+		fmt.Println("error: genModelCompareMethod() failed")
 		log.Fatal(err)
 	}
 	return s
 }
 
-// func genModelCountFunc(tab Table) string {
-// 	return fmt.Sprintf(modelCountFuncTemp, tab.ModelName, tab.ModelName)
-// }
+func genModelSortMethodsStructType(tab Table) string {
+	list := make([]string, len(tab.Columns))
+	var err error
+	for i, col := range tab.Columns {
+		list[i], err = nbfmt.Fmt(modelSortMethodsStructFieldTypeTemp, map[string]interface{}{"Column": col})
+		if err != nil {
+			fmt.Println("error: modelSortMethodStructFieldTypeTemp format failed")
+			log.Fatal(err)
+		}
+	}
+	s, err := nbfmt.Fmt(modelSortMethodsStructTypeTemp, map[string]interface{}{"Table": tab, "FieldTypeBlock": strings.Join(list, "\n")})
+	if err != nil {
+		fmt.Println("error: genModelSortMethodStructType() failed")
+		log.Fatal(err)
+	}
+	return s
+}
+
+func genModelSortMethodsFunc(tab Table) string {
+	list := make([]string, len(tab.Columns))
+	for i, col := range tab.Columns {
+		list[i] = genModelCompareMethod(col)
+	}
+	s, err := nbfmt.Fmt(modelSortMethodsStructFuncTemp, map[string]interface{}{"Table": tab, "CompareMethodBlock": strings.Join(list, "\n")})
+	if err != nil {
+		fmt.Println("error: genModelSortMethodFunc() failed")
+		log.Fatal(err)
+	}
+	return s
+}
+
+func genModelListLenMethod(tab Table) string {
+	s, err := nbfmt.Fmt(modelListLenMethodTemp, map[string]interface{}{"Table": tab})
+	if err != nil {
+		fmt.Println("error: genModelListLenMethod() failed")
+		log.Fatal(err)
+	}
+	return s
+}
+
+func genModelListSwapMethod(tab Table) string {
+	s, err := nbfmt.Fmt(modelListSwapMethodTemp, map[string]interface{}{"Table": tab})
+	if err != nil {
+		fmt.Println("error: genModelListSwapMethod() failed")
+		log.Fatal(err)
+	}
+	return s
+}
+
+func genModelListLessMethod(tab Table) string {
+	s, err := nbfmt.Fmt(modelListLessMethodTemp, map[string]interface{}{"Table": tab})
+	if err != nil {
+		fmt.Println("error: genModelListLessMethod() failed")
+		log.Fatal(err)
+	}
+	return s
+}
+
+func genModelSortFuncSwitchBlock(col Column, tab Table) string {
+	s, err := nbfmt.Fmt(modelSortFuncSwitchBlockTemp, map[string]interface{}{"Column": col, "Table": tab})
+	if err != nil {
+		fmt.Println("error: genModelSortFuncSwitchBlock() failed")
+		log.Fatal(err)
+	}
+	return s
+}
+
+func genModelSortFunc(tab Table) string {
+	list := make([]string, len(tab.Columns))
+	for i, col := range tab.Columns {
+		list[i] = genModelSortFuncSwitchBlock(col, tab)
+	}
+	s, err := nbfmt.Fmt(modelSortFuncTemp, map[string]interface{}{"Table": tab, "ColumnNumber": len(tab.Columns), "SwitchBlock": strings.Join(list, "\n")})
+	if err != nil {
+		fmt.Println("error: genModelSortFunc() failed")
+		log.Fatal(err)
+	}
+	return s
+}
+
+func genModelCountStmtDeclare(tab Table) string {
+	s, err := nbfmt.Fmt(modelCountStmtDeclareTemp, map[string]interface{}{"Table": tab})
+	if err != nil {
+		fmt.Println("error: genModelCountStmtDeclare() failed")
+		log.Fatal(err)
+	}
+	return s
+}
+
+func genModelCountStmtInit(tab Table, db Database) string {
+	s, err := nbfmt.Fmt(modelCountStmtInitTemp, map[string]interface{}{"Table": tab, "Database": db})
+	if err != nil {
+		fmt.Println("error: genModelCountStmtInit() failed")
+		log.Fatal(err)
+	}
+	return s
+}
+
 func genModelCountFunc(tab Table) string {
 	s, err := nbfmt.Fmt(modelCountFuncTemp, map[string]interface{}{"Table": tab})
 	if err != nil {
+		fmt.Println("error: genModelCountFunc() failed")
 		log.Fatal(err)
 	}
 	return s
@@ -745,7 +904,6 @@ func Gen(db Database, outName string) error {
 		buf.WriteString(genModelCountFunc(tab) + "\n\n")
 		buf.WriteString(genFromRowsFunc(tab) + "\n\n")
 		buf.WriteString(genFromRowFunc(tab) + "\n\n")
-		buf.WriteString(genModelExistsMethod(tab, db) + "\n\n")
 		buf.WriteString(genModelCheckMethod(tab) + "\n\n")
 		buf.WriteString(genModelListType(tab) + "\n\n")
 		buf.WriteString(genModelListLenMethod(tab) + "\n\n")

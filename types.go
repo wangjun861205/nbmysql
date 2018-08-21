@@ -65,7 +65,7 @@ func (db *Database) CreateTableIfNotExists(tab Table) error {
 	colList := make([]string, len(tab.Columns))
 	for i, col := range tab.Columns {
 		l := make([]string, 0, 6)
-		l = append(l, BackQuote(col.ColumnName))
+		l = append(l, col.ColumnName)
 		l = append(l, col.MySqlType)
 		if col.AutoIncrement {
 			l = append(l, "AUTO_INCREMENT")
@@ -88,11 +88,11 @@ func (db *Database) CreateTableIfNotExists(tab Table) error {
 	for _, uni := range tab.UniqueKeys {
 		bqList := make([]string, len(uni))
 		for i := range uni {
-			bqList[i] = BackQuote(string(uni[i].ColumnName))
+			bqList[i] = string(uni[i].ColumnName)
 		}
 		ukColList := make([]string, len(uni))
 		for i, col := range uni {
-			ukColList[i] = col.ColumnName
+			ukColList[i] = strings.Trim(col.ColumnName, "`")
 		}
 		uniqueList = append(uniqueList, fmt.Sprintf("UNIQUE KEY `%s_unique` (%s)", strings.Join(ukColList, "_"), strings.Join(bqList, ", ")))
 	}
@@ -100,8 +100,8 @@ func (db *Database) CreateTableIfNotExists(tab Table) error {
 	if len(uniqueList) > 0 {
 		uniqueClause = ", " + strings.Join(uniqueList, ", ")
 	}
-	stmt := fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s (%s, PRIMARY KEY (%s)%s)", BackQuote(tab.TableName), strings.Join(colList, ", "),
-		BackQuote(tab.PrimaryKey.ColumnName), uniqueClause)
+	stmt := fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s (%s, PRIMARY KEY (%s)%s)", tab.TableName, strings.Join(colList, ", "),
+		tab.PrimaryKey.ColumnName, uniqueClause)
 	_, err = conn.Exec(stmt)
 	return err
 }
@@ -115,9 +115,13 @@ func (db *Database) AddForeignKeyConstraint() error {
 	defer conn.Close()
 	for _, tab := range db.Tables {
 		for _, fk := range tab.ForeignKeys {
-			_, err := conn.Exec(fmt.Sprintf("ALTER TABLE %s ADD CONSTRAINT %s FOREIGN KEY (%s) REFERENCES %s (%s) ON DELETE CASCADE ON UPDATE CASCADE",
-				BackQuote(tab.TableName), BackQuote("fk_"+fk.DstTab.TableName+"__"+fk.DstCol.ColumnName), BackQuote(fk.SrcCol.ColumnName),
-				BackQuote(fk.DstTab.TableName), BackQuote(fk.DstCol.ColumnName)))
+			_, err := conn.Exec(
+				fmt.Sprintf("ALTER TABLE %s ADD CONSTRAINT %s FOREIGN KEY (%s) REFERENCES %s (%s) ON DELETE CASCADE ON UPDATE CASCADE",
+					tab.TableName,
+					BackQuote("fk_"+strings.Trim(fk.DstTab.TableName, "`")+"__"+strings.Trim(fk.DstCol.ColumnName, "`")),
+					fk.SrcCol.ColumnName,
+					fk.DstTab.TableName,
+					fk.DstCol.ColumnName))
 			if err != nil {
 				if sqlErr, ok := err.(*mysql.MySQLError); ok && sqlErr.Number == 1826 {
 					log.Printf("warnning: %s", sqlErr.Error())
@@ -127,12 +131,13 @@ func (db *Database) AddForeignKeyConstraint() error {
 			}
 		}
 		for _, mtm := range tab.ManyToManys {
-			_, err := conn.Exec(fmt.Sprintf("ALTER TABLE %s ADD CONSTRAINT %s FOREIGN KEY (%s) REFERENCES %s (%s) ON DELETE CASCADE ON UPDATE CASCADE",
-				BackQuote(mtm.MidTab.TableName),
-				BackQuote("midfk_"+tab.TableName+"__"+mtm.SrcCol.ColumnName),
-				BackQuote(mtm.MidLeftCol.ColumnName),
-				BackQuote(tab.TableName),
-				BackQuote(mtm.SrcCol.ColumnName)))
+			_, err := conn.Exec(
+				fmt.Sprintf("ALTER TABLE %s ADD CONSTRAINT %s FOREIGN KEY (%s) REFERENCES %s (%s) ON DELETE CASCADE ON UPDATE CASCADE",
+					mtm.MidTab.TableName,
+					BackQuote("midfk_"+strings.Trim(tab.TableName, "`")+"__"+strings.Trim(mtm.SrcCol.ColumnName, "`")),
+					mtm.MidLeftCol.ColumnName,
+					tab.TableName,
+					mtm.SrcCol.ColumnName))
 			if err != nil {
 				if sqlErr, ok := err.(*mysql.MySQLError); ok && sqlErr.Number == 1826 {
 					log.Printf("warnning: %s", sqlErr.Error())

@@ -203,12 +203,12 @@ func findManyToMany(s string) [][]string {
 	return manyToManyRe.FindAllStringSubmatch(s, -1)
 }
 
-func findPrimaryKey(s string) ([]string, error) {
+func findPrimaryKey(s string) (string, error) {
 	primaryKey := primaryKeyRe.FindStringSubmatch(s)
 	if len(primaryKey) == 0 {
-		return nil, errors.New("no primary key")
+		return "", errors.New("no primary key")
 	}
-	return primaryKey, nil
+	return BackQuote(primaryKey[1]), nil
 }
 
 func findAutoIncrement(s string) []string {
@@ -288,7 +288,7 @@ func ParseDatabase(file string) (Database, error) {
 
 func parseTable(t []string, db Database) (Table, error) {
 	table := Table{}
-	table.TableName = t[1]
+	table.TableName = BackQuote(t[1])
 	table.ModelName = ToCap(t[1])
 	table.ArgName = ToLocal(t[1])
 	columns, err := findColumns(t[2])
@@ -297,7 +297,7 @@ func parseTable(t []string, db Database) (Table, error) {
 	}
 	for _, column := range columns {
 		col := Column{}
-		col.ColumnName = column[1]
+		col.ColumnName = BackQuote(column[1])
 		col.ArgName = ToLocal(column[1])
 		col.FieldName = ToCap(column[1])
 		col.MySqlType = column[2]
@@ -321,7 +321,7 @@ func parseTable(t []string, db Database) (Table, error) {
 		return table, err
 	}
 	for i := range table.Columns {
-		if table.Columns[i].ColumnName == primaryKey[1] {
+		if table.Columns[i].ColumnName == primaryKey {
 			table.PrimaryKey = &table.Columns[i]
 		}
 	}
@@ -338,18 +338,18 @@ func parseTable(t []string, db Database) (Table, error) {
 	table.ForeignKeyInfos = make([]ForeignKeyInfo, len(foreignKeys))
 	for i, fk := range foreignKeys {
 		table.ForeignKeyInfos[i] = ForeignKeyInfo{
-			DstTabName: fk[1],
-			SrcColName: fk[2],
-			DstColName: fk[3],
+			DstTabName: BackQuote(fk[1]),
+			SrcColName: BackQuote(fk[2]),
+			DstColName: BackQuote(fk[3]),
 		}
 	}
 	manyToManys := findManyToMany(t[2])
 	table.ManyToManyInfos = make([]ManyToManyInfo, len(manyToManys))
 	for i, mtm := range manyToManys {
 		table.ManyToManyInfos[i] = ManyToManyInfo{
-			DstTabName: mtm[1],
-			SrcColName: mtm[2],
-			DstColName: mtm[3],
+			DstTabName: BackQuote(mtm[1]),
+			SrcColName: BackQuote(mtm[2]),
+			DstColName: BackQuote(mtm[3]),
 		}
 	}
 	uniqueKeys, err := parseUniqueKeys(t[2], &table)
@@ -477,11 +477,11 @@ func parseManyToMany(info ManyToManyInfo, tab *Table, db *Database) error {
 	}
 
 	midTab := Table{
-		TableName: tab.TableName + "__" + dstTab.TableName,
+		TableName: BackQuote(strings.Trim(tab.TableName, "`") + "__" + strings.Trim(dstTab.TableName, "`")),
 		Columns: []Column{
-			Column{ColumnName: "id", MySqlType: "INT", AutoIncrement: true},
-			Column{ColumnName: tab.TableName + "__" + info.SrcColName, MySqlType: srcCol.MySqlType},
-			Column{ColumnName: info.DstTabName + "__" + info.DstColName, MySqlType: dstCol.MySqlType},
+			Column{ColumnName: "`id`", MySqlType: "INT", AutoIncrement: true},
+			Column{ColumnName: BackQuote(strings.Trim(tab.TableName, "`") + "__" + strings.Trim(info.SrcColName, "`")), MySqlType: srcCol.MySqlType},
+			Column{ColumnName: BackQuote(strings.Trim(info.DstTabName, "`") + "__" + strings.Trim(info.DstColName, "`")), MySqlType: dstCol.MySqlType},
 		},
 	}
 	midTab.AutoIncrement = &midTab.Columns[0]
