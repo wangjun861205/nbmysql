@@ -555,113 +555,16 @@ type sortFunc func() func(i, j int) int
 			sort.Sort(so)
 		}
 	}
+	func (l {{ tab.ModelName }}List) Filter(f func(*{{ tab.ModelName }}) bool) {{ tab.ModelName }}List {
+		fl := make({{ tab.ModelName }}List, 0, l.Len())
+		for _, m := range l {
+			if f(m) {
+				fl = append(fl, m)
+			}
+		}
+		return fl
+	}
 {{ endfor }}`
-
-const modelCompareByIntMethodTemp = `By{{Column.FieldName}}: func(i, j int) int {
-	if *ml.Models[i].{{Column.FieldName}} == *ml.Models[j].{{Column.FieldName}} {
-		return 0
-	}
-	if *ml.Models[i].{{Column.FieldName}} < *ml.Models[j].{{Column.FieldName}} {
-		return -1
-	}
-	return 1
-	},`
-
-const modelCompareByFloatMethodTemp = `By{{Column.FieldName}}: func(i, j int) int {
-	if *ml.Models[i].{{Column.FieldName}} == *ml.Models[j].{{Column.FieldName}} {
-		return 0
-	}
-	if *ml.Models[i].{{Column.FieldName}} < *ml.Models[j].{{Column.FieldName}} {
-		return -1
-	}
-	return 1
-	},`
-
-const modelCompareByStringMethodTemp = `By{{Column.FieldName}}: func(i, j int) int {
-	if *ml.Models[i].{{Column.FieldName}} == *ml.Models[j].{{Column.FieldName}} {
-		return 0
-	}
-	if *ml.Models[i].{{Column.FieldName}} < *ml.Models[j].{{Column.FieldName}} {
-		return -1
-	}
-	return 1
-	},`
-
-const modelCompareByBoolMethodTemp = `By{{Column.FieldName}}: func(i, j int) int {
-	if *ml.Models[i].{{Column.FieldName}} == *ml.Models[j].{{Column.FieldName}} {
-		return 0
-	}
-	if *ml.Models[i].{{Column.FieldName}} == false && *ml.Models[j].{{Column.FieldName}} == true {
-		return -1
-	}
-	return 1
-	},`
-
-const modelCompareByTimeMethodTemp = `By{{Column.FieldName}}: func(i, j int) int {
-	if ml.Models[i].{{Column.FieldName}}.Equal(*ml.Models[j].{{Column.FieldName}}) {
-		return 0
-	}
-	if ml.Models[i].{{Column.FieldName}}.Before(*ml.Models[j].{{Column.FieldName}}) {
-		return -1
-	}
-	return 1
-	},`
-
-const modelSortMethodsStructFieldTypeTemp = `By{{Column.FieldName}} func(i, j int) int`
-
-const modelSortMethodsStructTypeTemp = `type {{Table.ModelName}}SortMethods struct {
-	{{FieldTypeBlock}}
-	}`
-
-const modelSortMethodsStructFuncTemp = `func (ml {{Table.ModelName}}List) SortMethods() {{Table.ModelName}}SortMethods {
-	return {{Table.ModelName}}SortMethods{
-		{{CompareMethodBlock}}
-		}
-	}`
-
-const modelListLenMethodTemp = `func (ml {{Table.ModelName}}List) Len() int {
-	return len(ml.Models)
-	}`
-
-const modelListSwapMethodTemp = `func (ml {{Table.ModelName}}List) Swap(i, j int) {
-	ml.Models[i], ml.Models[j] = ml.Models[j], ml.Models[i]
-	}`
-
-const modelListLessMethodTemp = `func (ml {{Table.ModelName}}List) Less(i, j int) bool {
-	var less bool
-	for _, f := range ml.Funcs {
-		res := f(i, j)
-		if res == -1 {
-			less = true
-			break
-		} else if res == 1 {
-			break
-		}
-		continue
-	}
-	return less
-}`
-
-const modelSortFuncSwitchBlockTemp = `case "{{Column.FieldName}}": 
-	{{Table.ArgName}}List.Funcs = append({{Table.ArgName}}List.Funcs, sortMethods.By{{Column.FieldName}})`
-
-const modelSortFuncTemp = `func {{Table.ModelName}}SortBy(ml []*{{Table.ModelName}}, desc bool, fields ...string) {
-	{{Table.ArgName}}List := {{Table.ModelName}}List {
-		Models: ml,
-		Funcs: make([]func(i, j int) int, 0, {{ColumnNumber}}),
-		}
-	sortMethods := {{Table.ArgName}}List.SortMethods()
-	for _, field := range fields {
-		switch field {
-			{{SwitchBlock}}
-		}
-	}
-	if desc {
-		sort.Sort(sort.Reverse({{Table.ArgName}}List))
-	} else {
-		sort.Sort({{Table.ArgName}}List)
-	}
-}`
 
 const countFuncTemp = `{{ for _, tab in DB.Tables }}
 	func Count{{ tab.ModelName }}(where ...string) (int64, error) {
