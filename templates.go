@@ -1,14 +1,14 @@
 package nbmysql
 
 //PackageTemp package template
-var packageTemp = `package {{Package}}`
+var packageTemp = `package {{ DB.Package }}
+`
 
 //ImportTemp import block template
 const importTemp = `import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"log"
 	"strings"
 	"time"
 	"sort"
@@ -16,521 +16,618 @@ const importTemp = `import (
 )`
 
 //dbTemp *sql.DB declaration template
-const dbTemp = `var {{Database>ObjName}} *sql.DB`
+const dbTemp = `var {{ DB.ObjName }} *sql.DB
+`
 
 //initFuncTemp init func template
 const initFuncTemp = `func init() {
-	db, err := sql.Open("mysql", "{{Database>Username}}:{{Database>Password}}@tcp({{Database>Address}})/{{Database>DatabaseName}}")
+	db, err := sql.Open("mysql", "{{ DB.Username }}:{{ DB.Password }}@tcp({{ DB.Address }})/{{ DB.DatabaseName }}")
 	if err != nil {
 		panic(err)
 	}
-	{{Database>ObjName}} = db
-	{{Block}}
-}`
+	{{ DB.ObjName }} = db
+}
+`
 
-//mapElemTemp template of elements of map
-const mapElemTemp = `"@{{Column>FieldName}}": "{{Column>ColumnName}}",`
+const whereMapTemp = `{{ for _, tab in DB.Tables }}
+	var {{ tab.ModelName }}Map = map[string]string {
+		{{ for _, col in tab.Columns }}
+			"@{{ col.FieldName }}": "{{ col.ColumnName }}",
+		{{ endfor }}
+	}
+{{ endfor }}`
 
-//queryFieldMapTemp query field map declaration template
-const queryFieldMapTemp = `var {{Table>ModelName}}Map = map[string]string {
-	{{Block}}
-	}`
-
-//fieldTemp field in table model template
-const fieldTemp = `{{Column>FieldName}} *{{Column>FieldType}}`
-
-//ModelTemp model template
-const modelTemp = `type {{Table>ModelName}} struct {
-		{{Block}}
-		_IsStored bool
-}`
-
-const modelGetFieldMethodTemp = `func (m *{{Table>ModelName}}) Get{{Column>FieldName}}() ({{Column>FieldType}}, bool) {
-	if m.{{Column>FieldName}} == nil {
-		return {{ZeroValue}}, true
-		}
-	return *m.{{Column>FieldName}}, false
-	}`
-
-const modelSetFieldMethodTemp = `func (m *{{Table>ModelName}}) Set{{Column>FieldName}}(val {{Column>FieldType}}, null bool) {
-	if null {
-		m.{{Column>FieldName}} = nil
-		m._IsStored = false
-		return
-		}
-	m.{{Column>FieldName}} = &val
-	m._IsStored = false
-	}`
-
-//funcArgTemp arguments in function signature template
-const funcArgTemp = `{{Column>ArgName}} *{{Column>FieldType}}`
-
-//newModelAsignTemp asign statement in NewXXX() template
-const newModelAsignTemp = `{{Column>FieldName}}: {{Column>ArgName}}`
-
-//newModelFuncTemp NewXXX() template
-const newModelFuncTemp = `func New{{Table>ModelName}}({{Args}}) *{{Table>ModelName}} {
-		return &{{Table>ModelName}}{
-			{{Asigns}}, 
-			_IsStored: false}
-	}`
-
-//allModelFuncTemp AllXXX() template
-const allModelFuncTemp = `func All{{Table>ModelName}}() ([]*{{Table>ModelName}}, error) {
-		rows, err := {{Database>ObjName}}.Query("SELECT * FROM {{Table>TableName}}")
+const fromRowFuncTemp = `{{ for _, tab in DB.Tables }}
+	func {{ tab.ModelName }}FromRow(row *sql.Row) (*{{ tab.ModelName}}, error) {
+		m := {{ tab.ModelName }}{}
+		addrList := make([]interface{}, 0, 16)
+		{{ for _, col in tab.Columns }}
+			addrList = append(addrList, &(m.{{ col.FieldName }}))
+		{{ endfor }}
+		err := row.Scan(addrList...)
 		if err != nil {
 			return nil, err
 		}
-		list := make([]*{{Table>ModelName}}, 0, 256)
+		return &m, nil
+	}
+{{ endfor }}`
+
+const fromRowsFuncTemp = `{{ for _, tab in DB.Tables }}
+	func {{ tab.ModelName }}FromRows(rows *sql.Rows) ({{ tab.ModelName }}List, error) {
+		l := make({{ tab.ModelName }}List, 0, 128)
 		for rows.Next() {
-			model, err := {{Table>ModelName}}FromRows(rows)
+			m := {{ tab.ModelName }}{}
+			addrList := make([]interface{}, 0, 16)
+			{{ for _, col in tab.Columns }}
+				addrList = append(addrList, &(m.{{ col.FieldName }}))
+			{{ endfor }}
+			err := rows.Scan(addrList...)
 			if err != nil {
-				return nil, err
+				return l, err
 			}
-			model._IsStored = true
-			list = append(list, model)
+			l = append(l, &m)
 		}
-		return list, nil
-	}`
+		return l, nil
+	}
+{{ endfor }}`
 
-//queryModelFuncTemp QueryXXX() template
-const queryModelFuncTemp = `func Query{{Table>ModelName}}(query string) ([]*{{Table>ModelName}}, error) {
-		for k, v := range {{Table>ModelName}}Map {
-			query = strings.Replace(query, k, v, -1)
-		}
-		rows, err := {{Database>ObjName}}.Query(fmt.Sprintf("SELECT * FROM {{Table>TableName}} WHERE %s", query))
+const allModelFuncTemp = `{{ for _, tab in DB.Tables }}
+	func All{{ tab.ModelName }}() ({{ tab.ModelName }}List, error) {
+		rows, err := {{ DB.ObjName }}.Query("SELECT * FROM {{ tab.TableName }}")
 		if err != nil {
 			return nil, err
 		}
-		list := make([]*{{Table>ModelName}}, 0, 256)
-		for rows.Next() {
-			model, err := {{Table>ModelName}}FromRows(rows)
-			if err != nil {
-				return nil, err
+		return {{ tab.ModelName }}FromRows(rows)
+	}
+{{ endfor }}`
+
+const queryFuncTemp = `{{ for _, tab in DB.Tables }}
+	func Query{{ tab.ModelName }}(where string) ({{ tab.ModelName }}List, error) {
+		for k, v := range {{ tab.ModelName }}Map {
+			where = strings.Replace(where, k, v, -1)
+		}
+		rows, err := {{ DB.ObjName }}.Query(fmt.Sprintf("SELECT * FROM {{ tab.TableName }} WHERE %s", where))
+		if err != nil {
+			return nil, err
+		}
+		return {{ tab.ModelName }}FromRows(rows)
+	}
+{{ endfor }}`
+
+const queryOneFuncTemp = `{{ for _, tab in DB.Tables }}
+	func QueryOne{{ tab.ModelName }}(where string) (*{{ tab.ModelName }}, error) {
+		for k, v := range {{ tab.ModelName }}Map {
+			where = strings.Replace(where, k, v, -1)
+		}
+		row := {{ DB.ObjName }}.QueryRow(fmt.Sprintf("SELECT * FROM {{ tab.TableName }} WHERE %s", where))
+		return {{ tab.ModelName }}FromRow(row)
+	}
+{{ endfor }}`
+
+const foreignKeyMethodTemp = `{{ for _, tab in DB.Tables }}
+	{{ for _, fk in tab.ForeignKeys }}
+		func (m *{{ tab.ModelName }}) {{ fk.DstTab.ModelName }}() (*{{ fk.DstTab.ModelName }}, error) {
+			isValid, isNull := m.{{ fk.SrcCol.FieldName }}.IsValid(), m.{{ fk.SrcCol.FieldName }}.IsNull()
+			if !isValid || isNull {
+				return nil, errors.New("{{ tab.ModelName }}.{{ fk.SrcCol.FieldName }} cannot be null")
 			}
-			model._IsStored = true
-			list = append(list, model)
+			stmtStr := fmt.Sprintf("SELECT * FROM {{ fk.DstTab.TableName }} WHERE {{ fk.DstCol.ColumnName }} = %s", m.{{ fk.SrcCol.FieldName }}.SQLVal())
+			row := {{ DB.ObjName }}.QueryRow(stmtStr)
+			return {{ fk.DstTab.ModelName }}FromRow(row)
 		}
-		return list, nil
-	}`
+	{{ endfor }}
+{{ endfor }}`
 
-const queryOneFuncTemp = `func QueryOne{{Table>ModelName}}(query string) (*{{Table>ModelName}}, error) {
-	for k, v := range {{Table>ModelName}}Map {
-		query = strings.Replace(query, k, v, -1)
-		}
-	row := {{Database>ObjName}}.QueryRow(fmt.Sprintf("SELECT * FROM {{Table>TableName}} WHERE %s", query))
-	return {{Table>ModelName}}FromRow(row)
-	}`
+const reverseForeignKeyMethodTemp = `{{ for _, tab in DB.Tables }}
+	{{ for _, rfk in tab.ReverseForeignKeys }}
+		func (m *{{ tab.ModelName }}) {{ rfk.DstTab.ModelName }}List() struct {
+			All func() ({{ rfk.DstTab.ModelName }}List, error)
+			Query func(string) ({{ rfk.DstTab.ModelName }}List, error)
+		} {
+			return struct {
+				All func() ({{ rfk.DstTab.ModelName }}List, error)
+				Query func(string) ({{ rfk.DstTab.ModelName }}List, error)
+				} {
+					All: func() ({{ rfk.DstTab.ModelName }}List, error) {
+						isValid, isNull := m.{{ rfk.SrcCol.FieldName }}.IsValid(), m.{{ rfk.SrcCol.FieldName }}.IsNull()
+						if !isValid || isNull {
+							return nil, errors.New("{{ tab.ModelName }}.{{ rfk.SrcCol.FieldName }} cannot be null")
+						}
+						stmtStr := fmt.Sprintf("SELECT * FROM {{ rfk.DstTab.TableName }} WHERE {{ rfk.DstCol.ColumnName }} = %s", m.{{ rfk.SrcCol.FieldName }}.SQLVal())
+						rows, err := {{ DB.ObjName }}.Query(stmtStr)
+						if err != nil {
+							return nil, err
+						}
+						return {{ rfk.DstTab.ModelName }}FromRows(rows)
+						},
+					Query: func(where string) ({{ rfk.DstTab.ModelName }}List, error) {
+						isValid, isNull := m.{{ rfk.SrcCol.FieldName }}.IsValid(), m.{{ rfk.SrcCol.FieldName }}.IsNull()
+						if !isValid || isNull {
+							return nil, errors.New("{{ tab.ModelName }}.{{ rfk.SrcCol.FieldName }} cannot be null")
+						}
+						var stmtStr string
+						for k, v := range {{ tab.ModelName }}Map {
+							where = strings.Replace(where, k, v, -1)
+						}
+						if where != "" {
+							stmtStr = fmt.Sprintf("SELECT * FROM {{ rfk.DstTab.TableName }} WHERE {{ rfk.DstCol.ColumnName }} = %s AND %s", m.{{ rfk.SrcCol.FieldName }}.SQLVal(), where)
+						} else {
+							stmtStr = fmt.Sprintf("SELECT * FROM {{ rfk.DstTab.TableName }} WHERE {{ rfk.DstCol.ColumnName }} = %s", m.{{ rfk.SrcCol.FieldName }}.SQLVal())
+						}
+						rows, err := {{ DB.ObjName }}.Query(stmtStr)
+						if err != nil {
+							return nil, err
+						}
+						return {{ rfk.DstTab.ModelName }}FromRows(rows)
+						},
+					}
+			}
+	{{ endfor }}
+{{ endfor }}`
 
-//foreignKeyMethodTemp foreign key relation method template
-const foreignKeyMethodTemp = `func (m *{{FK>DstTab>ModelName}}) {{FK>DstTab>ModelName}}By{{FK>SrcCol>FieldName}}() (*{{FK>DstTab>ModelName}}, error) {
-	if m.{{FK>SrcCol>FieldName}} == nil {
-		return nil, errors.New("{{Table>ModelName}}.{{FK>SrcCol>FieldName}} must not be nil")
-	}
-	row := {{Database>ObjName}}.QueryRow("{{QueryStmt}}", m.{{FK>SrcCol>FieldName}})
-	if row == nil {
-		return nil, nbmysql.ErrRecordNotExists
-	}
-	model, err := {{FK>DstTab>ModelName}}FromRow(row)
-	if err != nil {
-		return nil, err
-	}
-	model._IsStored = true
-	return model, nil
-}`
+const manyToManyMethodTemp = `{{ for _, tab in DB.Tables }} 
+	{{ for _, mtm in tab.ManyToManys }}
+		func (m *{{ tab.ModelName }}) {{ mtm.DstTab.ModelName }}List() struct {
+			All func() ({{ mtm.DstTab.ModelName }}List, error)
+			Query func(string) ({{ mtm.DstTab.ModelName }}List, error)
+			Add func(*{{ mtm.DstTab.ModelName }}) error
+			Remove func(*{{ mtm.DstTab.ModelName }}) error
+			} {
+				return struct {
+					All func() ({{ mtm.DstTab.ModelName }}List, error)
+					Query func(string) ({{ mtm.DstTab.ModelName }}List, error)
+					Add func(*{{ mtm.DstTab.ModelName }}) error
+					Remove func(*{{ mtm.DstTab.ModelName }}) error
+					} {
+						All: func() ({{ mtm.DstTab.ModelName }}List, error) {
+							isValid, isNull := m.{{ mtm.SrcCol.FieldName }}.IsValid(), m.{{ mtm.SrcCol.FieldName }}.IsNull()
+							if !isValid || isNull {
+								return nil, errors.New("{{ tab.ModelName }}.{{ mtm.SrcCol.FieldName }} cannot be null")
+							}
+							stmtStr := fmt.Sprintf("SELECT {{ mtm.DstTab.TableName }}.* FROM {{ tab.TableName }} JOIN {{ mtm.MidTab.TableName }} ON {{ tab.TableName }}.{{ mtm.SrcCol.ColumnName }} = {{ mtm.MidTab.TableName }}.{{ mtm.MidLeftCol.ColumnName }} JOIN {{ mtm.DstTab.TableName }} ON {{ mtm.MidTab.TableName }}.{{ mtm.MidRightCol.ColumnName }} = {{ mtm.DstTab.TableName}}.{{ mtm.DstCol.ColumnName }} WHERE {{ tab.TableName }}.{{ mtm.SrcCol.ColumnName }} = %s", m.{{ mtm.SrcCol.FieldName }}.SQLVal())
+							rows, err := {{ DB.ObjName }}.Query(stmtStr)
+							if err != nil {
+								return nil, err
+							}
+							return {{ mtm.DstTab.ModelName }}FromRows(rows)
+						},
+						Query: func(where string) ({{ mtm.DstTab.ModelName }}List, error) {
+							isValid, isNull := m.{{ mtm.SrcCol.FieldName }}.IsValid(), m.{{ mtm.SrcCol.FieldName }}.IsNull()
+							if !isValid || isNull {
+								return nil, errors.New("{{ tab.ModelName }}.{{ mtm.SrcCol.FieldName }} cannot be null")
+							}
+							for k, v := range {{ mtm.DstTab.ModelName }}Map {
+								where = strings.Replace(where, k, v, -1)
+							}
+							var stmtStr string
+							if where == "" {
+								stmtStr = fmt.Sprintf("SELECT {{ mtm.DstTab.TableName }}.* FROM {{ tab.TableName }} JOIN {{ mtm.MidTab.TableName }} ON {{ tab.TableName }}.{{ mtm.SrcCol.ColumnName }} = {{ mtm.MidTab.TableName }}.{{ mtm.MidLeftCol.ColumnName }} JOIN {{ mtm.DstTab.TableName }} ON {{ mtm.MidTab.TableName }}.{{ mtm.MidRightCol.ColumnName }} = {{ mtm.DstTab.TableName}}.{{ mtm.DstCol.ColumnName }} WHERE {{ tab.TableName }}.{{ mtm.SrcCol.ColumnName }} = %s", m.{{ mtm.SrcCol.FieldName }}.SQLVal())
+							} else {
+								stmtStr = fmt.Sprintf("SELECT {{ mtm.DstTab.TableName }}.* FROM {{ tab.TableName }} JOIN {{ mtm.MidTab.TableName }} ON {{ tab.TableName }}.{{ mtm.SrcCol.ColumnName }} = {{ mtm.MidTab.TableName }}.{{ mtm.MidLeftCol.ColumnName }} JOIN {{ mtm.DstTab.TableName }} ON {{ mtm.MidTab.TableName }}.{{ mtm.MidRightCol.ColumnName }} = {{ mtm.DstTab.TableName}}.{{ mtm.DstCol.ColumnName }} WHERE {{ tab.TableName }}.{{ mtm.SrcCol.ColumnName }} = %s AND %s", m.{{ mtm.SrcCol.FieldName }}.SQLVal(), where)
+							}
+							rows, err := {{ DB.ObjName }}.Query(stmtStr)
+							if err != nil {
+								return nil, err
+							}
+							return {{ mtm.DstTab.ModelName }}FromRows(rows)
+						},
+						Add: func(mm *{{ mtm.DstTab.ModelName }}) error {
+							isValid, isNull := m.{{ mtm.SrcCol.FieldName }}.IsValid(), m.{{ mtm.SrcCol.FieldName }}.IsNull()
+							if !isValid || isNull {
+								return errors.New("{{ tab.ModelName }}.{{ mtm.SrcCol.FieldName }} cannot be null")
+							}
+							isValid, isNull = mm.{{ mtm.DstCol.FieldName }}.IsValid(), mm.{{ mtm.DstCol.FieldName }}.IsNull()
+							if !isValid || isNull {
+								return errors.New("{{ mtm.DstTab.ModelName }}.{{ mtm.DstCol.FieldName }} cannot be null")
+							}
+							stmtStr := fmt.Sprintf("INSERT INTO {{ mtm.MidTab.TableName }} ({{ mtm.MidLeftCol.ColumnName }}, {{ mtm.MidRightCol.ColumnName }}) VALUES (%s, %s)", m.{{ mtm.SrcCol.FieldName }}.SQLVal(), mm.{{ mtm.DstCol.FieldName }}.SQLVal())
+							_, err := {{ DB.ObjName }}.Exec(stmtStr)
+							return err
+						},
+						Remove: func(mm *{{ mtm.DstTab.ModelName }}) error {
+							isValid, isNull := m.{{ mtm.SrcCol.FieldName }}.IsValid(), m.{{ mtm.SrcCol.FieldName }}.IsNull()
+							if !isValid || isNull {
+								return errors.New("{{ tab.ModelName }}.{{ mtm.SrcCol.FieldName }} cannot be null")
+							}
+							isValid, isNull = mm.{{ mtm.DstCol.FieldName }}.IsValid(), mm.{{ mtm.DstCol.FieldName }}.IsNull()
+							if !isValid || isNull {
+								return errors.New("{{ mtm.DstTab.ModelName }}.{{ mtm.DstCol.FieldName }} cannot be null")
+							}
+							stmtStr := fmt.Sprintf("DELETE FROM {{ mtm.MidTab.TableName }} WHERE {{ mtm.MidLeftCol.ColumnName }} = %s AND {{ mtm.MidRightCol.ColumnName }} = %s", m.{{ mtm.SrcCol.FieldName }}.SQLVal(), mm.{{ mtm.DstCol.FieldName }}.SQLVal())
+							_, err := {{ DB.ObjName }}.Exec(stmtStr)
+							return err
+						},
+					}
+				}
+	{{ endfor }}
+{{ endfor }}`
 
-//foreignKeyQuerySQLTemp query sql statement template in foreign key relation
-const foreignKeyQuerySQLTemp = `SELECT * FROM {{FK>DstTab>TableName}} WHERE {{FK>DstCol>ColumnName}} = ?`
-
-//reverseForeignKeyStructTypeTemp reverse foreign key struct definition template
-const reverseForeignKeyStructTypeTemp = `type {{Table>ModelName}}To{{RFK>DstTab>ModelName}} struct {
-	All func() ([]*{{RFK>DstTab>ModelName}}, error)
-	Query func(query string) ([]*{{RFK>DstTab>ModelName}}, error)}`
-
-//reverseForeignKeyAllSQLTemp sql statement template in reverse foreign key All() method
-const reverseForeignKeyAllSQLTemp = `SELECT * FROM {{RFK>DstTab>TableName}} WHERE {{RFK>DstCol>ColumnName}} = ?`
-
-//reverseForeignKeyAllMethodTemp All() method template in reverse foreign key relation struct
-const reverseForeignKeyAllMethodTemp = `func() ([]*{{RFK>DstTab>ModelName}}, error) {
-	if m.{{RFK>SrcCol>FieldName}} == nil {
-		return nil, errors.New("{{Table>ModelName}}.{{RFK>SrcCol>FieldName}} must not be nil")
-	}
-	rows, err := {{Database>ObjName}}.Query("{{QueryStmt}}", *m.{{RFK>SrcCol>FieldName}})
-	if err != nil {
-		return nil, err
-	}
-	list := make([]*{{RFK>DstTab>ModelName}}, 0, 256)
-	for rows.Next() {
-		model, err := {{RFK>DstTab>ModelName}}FromRows(rows)
-		if err != nil {
-			return nil, err
-		}
-		model._IsStored = true
-		list = append(list, model)
-	}
-	return list, nil
-}`
-
-//reverseForeignKeyQuerySQLTemp sql statement template in Query() method of reverse foreign key relation struct
-const reverseForeignKeyQuerySQLTemp = `SELECT * FROM {{RFK>DstTab>TableName}} WHERE {{RFK>DstCol>ColumnName}} = ? AND %s`
-
-//reverseForeignKeyQueryMethodTemp Query() method template in reverse foreign key relation struct
-const reverseForeignKeyQueryMethodTemp = `func(query string) ([]*{{RFK>DstTab>ModelName}}, error) {
-	if m.{{RFK>SrcCol>FieldName}} == nil {
-		return nil, errors.New("{{Table>ModelName}}.{{RFK>SrcCol>FieldName}} must not be nil")
-	}
-	for k, v := range {{RFK>DstTab>ModelName}}Map {
-		query = strings.Replace(query, k, v, -1)
-	}
-	rows, err := {{Database>ObjName}}.Query(fmt.Sprintf("{{QueryStmt}}", query), *m.{{RFK>SrcCol>FieldName}})
-	if err != nil {
-		return nil, err
-	}
-	list := make([]*{{RFK>DstTab>ModelName}}, 0, 256)
-	for rows.Next() {
-		model, err := {{RFK>DstTab>ModelName}}FromRows(rows)
-		if err != nil {
-			return nil, err
-		}
-		model._IsStored = true
-		list = append(list, model)
-	}
-	return list, nil
-}`
-
-//reverseForeignKeyMethodTemp foreign key realtion method template
-const reverseForeignKeyMethodTemp = `func (m *{{RFK>DstTab>ModelName}}) {{RFK>DstTab>ModelName}}By{{RFK>SrcCol>FieldName}}() {{Table>ModelName}}To{{RFK>DstTab>ModelName}} {
-	return {{Table>ModelName}}To{{RFK>DstTab>ModelName}} {
-		All: {{AllMethod}},
-		Query: {{QueryMethod}},
-	}
-}`
-
-//manyToManyStructTypeTemp many to many relation struct definition template
-const manyToManyStructTypeTemp = `type {{Table>ModelName}}To{{MTM>DstTab>ModelName}} struct {
-		All    func() ([]*{{MTM>DstTab>ModelName}}, error)
-		Query func(query string) ([]*{{MTM>DstTab>ModelName}}, error)
-		Add func({{MTM>DstTab>ArgName}} *{{MTM>DstTab>ModelName}}) error
-		Remove func({{MTM>DstTab>ArgName}} *{{MTM>DstTab>ModelName}}) error
-	}`
-
-//manyToManyAllSQLTemp sql statement template in All() method of many to many relation struct
-const manyToManyAllSQLTemp = `SELECT {{MTM>DstTab>TableName}}.* FROM {{Table>TableName}} JOIN {{MTM>MidTab>TableName}} ON {{Table>TableName}}.{{MTM>SrcCol>ColumnName}}={{MTM>MidTab>TableName}}.{{MTM>MidLeftCol>ColumnName}} JOIN {{MTM>DstTab>TableName}} on {{MTM>MidTab>TableName}}.{{MTM>MidRightCol>ColumnName}} = {{MTM>DstTab>TableName}}.{{MTM>DstCol>ColumnName}} WHERE {{Table>TableName}}.{{MTM>DstCol>ColumnName}} = ?`
-
-//manyToManyAllMethodTemp All() method template in many to many relation struct
-const manyToManyAllMethodTemp = `func() ([]*{{MTM>DstTab>ModelName}}, error) {
-	rows, err := {{Database>ObjName}}.Query("{{QueryStmt}}", *m.{{MTM>SrcCol>FieldName}})
-	if err != nil {
-		return nil, err
-	}
-	list := make([]*{{MTM>DstTab>ModelName}}, 0, 256)
-	for rows.Next() {
-		model, err := {{MTM>DstTab>ModelName}}FromRows(rows)
-		if err != nil {
-			return nil, err
-		}
-		model._IsStored = true
-		list = append(list, model)
-	}
-	return list, nil
-}`
-
-//manyToManyQuerySQLTemp sql statement template in Query() method of many to many relation struct
-const manyToManyQuerySQLTemp = `SELECT {{MTM>DstTab>TableName}}.* FROM {{Table>TableName}} JOIN {{MTM>MidTab>TableName}} ON {{Table>TableName}}.{{MTM>SrcCol>ColumnName}}={{MTM>MidTab>TableName}}.{{MTM>MidLeftCol>ColumnName}} JOIN {{MTM>DstTab>TableName}} on {{MTM>MidTab>TableName}}.{{MTM>MidRightCol>ColumnName}} = {{MTM>DstTab>TableName}}.{{MTM>DstCol>ColumnName}} WHERE {{Table>TableName}}.{{MTM>SrcCol>ColumnName}} = ? AND %s`
-
-//manyToManyQueryMethodTemp Query() method template in many to many relation struct
-const manyToManyQueryMethodTemp = `func(query string) ([]*{{MTM>DstTab>ModelName}}, error) {
-	for k, v := range {{MTM>DstTab>ModelName}}Map {
-		query = strings.Replace(query, k, v, -1)
-	}
-	rows, err := {{Database>ObjName}}.Query(fmt.Sprintf("{{QueryStmt}}", query), *m.{{MTM>SrcCol>FieldName}})
-	if err != nil {
-		return nil, err
-	}
-	list := make([]*{{MTM>DstTab>ModelName}}, 0, 256)
-	for rows.Next() {
-		model, err := {{MTM>DstTab>ModelName}}FromRows(rows)
-		if err != nil {
-			return nil, err
-		}
-		model._IsStored = true
-		list = append(list, model)
-	}
-	return list, nil
-}`
-
-//manyToManyAddMethodTemp Add() method template in many to many relation struct
-const manyToManyAddMethodTemp = `func({{MTM>DstTab>ArgName}} *{{MTM>DstTab>ModelName}}) error {
-	if !m._IsStored {
-		return errors.New("{{Table>ModelName}} model is not stored in database")
-	}
-	if !{{MTM>DstTab>ArgName}}._IsStored {
-		return errors.New("{{MTM>DstTab>ModelName}} model is not stored in database")
-	}
-	_, err := {{Table>ModelName}}To{{MTM>DstTab>ModelName}}InsertStmt.Exec(m.{{MTM>SrcCol>FieldName}}, {{MTM>DstTab>ArgName}}.{{MTM>DstCol>FieldName}})
-	return err
-}`
-
-const manyToManyRemoveMethodTemp = `func({{MTM>DstTab>ArgName}} *{{MTM>DstTab>ModelName}}) error {
-	if !m._IsStored {
-		return errors.New("{{Table>ModelName}} model is not stored in database")
-	}
-	if !{{MTM>DstTab>ArgName}}._IsStored {
-		return errors.New("{{MTM>DstTab>ModelName}} model is not stored in database")
-	}
-	_, err := {{Table>ModelName}}To{{MTM>DstTab>ModelName}}DeleteStmt.Exec(m.{{MTM>SrcCol>FieldName}}, {{MTM>DstTab>ArgName}}.{{MTM>DstCol>FieldName}})
-	return err
-}`
-
-//manyToManyMethodTemp many to many relation struct declaration template
-const manyToManyMethodTemp = `func (m *{{Table>ModelName}}) {{MTM>DstTab>ModelName}}By{{MTM>SrcCol>FieldName}}() {{Table>ModelName}}To{{MTM>DstTab>ModelName}} {
-	return {{Table>ModelName}}To{{MTM>DstTab>ModelName}}{
-		All: {{AllMethod}},
-		Query: {{QueryMethod}},
-		Add: {{AddMethod}},
-		Remove: {{RemoveMethod}},
-	}
-}`
-
-const stmtArgNilToDefaultTemp = `if m.{{Column>FieldName}} == nil {
+const stmtArgNilToDefaultTemp = `if m.{{Column.FieldName}} == nil {
 	argList = append(argList, {{DefaultValue}})
 	} else {
-	argList = append(argList, m.{{Column>FieldName}})
+	argList = append(argList, m.{{Column.FieldName}})
 	}`
 
-const stmtArgTemp = `argList = append(argList, m.{{Column>FieldName}})`
+const stmtArgTemp = `argList = append(argList, m.{{Column.FieldName}})`
 
 const stmtArgNilToDefaultBlockTemp = `argList := make([]interface{}, 0, {{Length}})
 {{Block}}`
 
-//modelInsertMethodTemp XXX.Insert() method template
-const modelInsertMethodTemp = `func (m *{{Table>ModelName}}) Insert() error {
-		err := m.check()
+const modelInsertMethodTemp = `{{ for _, tab in DB.Tables }}
+func (m *{{ tab.ModelName }})Insert() error {
+	colList := make([]string, 0, 16)
+	valList := make([]string, 0, 16)
+	{{ for _, col in tab.Columns }}
+		if m.{{ col.FieldName }}.IsValid() {
+			if m.{{ col.FieldName }}.IsNull() {
+				colList = append(colList, {{ col.ColumnName }})
+				valList = append(valList, "NULL")
+			} else {
+				colList = append(colList, {{ col.ColumnName }})
+				valList = append(valList, m.{{ col.FieldName }}.SQLVal())
+			}
+		}
+	{{ endfor }}
+	stmtStr := fmt.Sprintf("INSERT INTO {{ tab.TableName }} (%s) VALUES (%s)", strings.Join(colList, ", "), strings.Join(valList, ", "))
+	_, err := {{ DB.ObjName }}.Exec(stmtStr)
+	return err
+}
+{{ endfor }}`
+
+const modelUpdateMethodTemp = `{{ for _, tab in DB.Tables }}
+	func (m *{{ tab.ModelName }})Update() error {
+		colList := make([]string, 0, 16)
+		valList := make([]string, 0, 16)
+		if !m.{{ tab.PrimaryKey.FieldName }}.IsValid() || m.{{ tab.PrimaryKey.FieldName }}.IsNull() {
+			return errors.New("{{ tab.ModelName }}.Update(): primary key cannot be invalid or null")
+		}
+		{{ for _, col in tab.Columns }}
+			{{ if col.ColumnName != tab.PrimaryKey.ColumnName }}
+				if m.{{ col.FieldName }}.IsValid() {
+					colList = append(colList, {{ col.ColumnName }})
+					if m.{{ col.FieldName }}.IsNull() {
+						valList = append(valList, "NULL")
+					} else {
+						valList = append(valList, m.{{ col.FieldName }}.SQLVal())
+					}
+				}
+			{{ endif }}
+		{{ endfor }}
+		if len(colList) == 0 {
+			return errors.New("no valid field to update")
+		}
+		setList := make([]string, len(colList))
+		for i := range colList {
+			setList[i] = colList[i] + "=" + valList[i]
+		}
+		stmtStr := fmt.Sprintf("UPDATE {{ tab.TableName }} SET %s WHERE {{ tab.PrimaryKey.ColumnName }} = %s", strings.Join(setList, ", "), m.{{ tab.PrimaryKey.FieldName }}.SQLVal())
+		_, err := {{ DB.ObjName }}.Exec(stmtStr)
+		return err
+	}
+{{ endfor }}
+		`
+const modelInsertOrUpdateMethodTemp = `{{ for _, tab in DB.Tables }}
+	func (m *{{ tab.ModelName }}) InsertOrUpdate() error {
+		insertColList := make([]string, 0, 16)
+		insertValList := make([]string, 0, 16)
+		updateColList := make([]string, 0, 16)
+		updateValList := make([]string, 0, 16)
+		{{ for _, col in tab.Columns }}
+			{{ if col.ColumnName != tab.AutoIncrement.ColumnName }}
+				if m.{{ col.FieldName }}.IsValid() {
+					insertColList = append(insertColList, {{ col.ColumnName }})
+					{{ if col.ColumnName != tab.PrimaryKey.ColumnName }}
+						updateColList = append(updateColList, {{ col.ColumnName }})
+					{{ endif }}
+					if m.{{ col.FieldName }}.IsNull() {
+						insertValList = append(insertValList, "NULL")
+						{{ if col.ColumnName != tab.PrimaryKey.ColumnName }}
+							updateValList = append(updateValList, "NULL")
+						{{ endif }}
+					} else {
+						insertValList = append(insertValList, m.{{ col.FieldName }}.SQLVal())
+						{{ if col.ColumnName != tab.PrimaryKey.ColumnName }}
+							updateValList = append(updateValList, m.{{ col.FieldName }}.SQLVal())
+						{{ endif }}
+					}
+				}
+			{{ endif }}
+		{{ endfor }}
+		setList := make([]string, len(updateColList))
+		for i := range updateColList {
+			setList[i] = updateColList[i] + "=" + updateValList[i]
+		}
+		stmtStr := fmt.Sprintf("INSERT INTO {{ tab.TableName }} (%s) VALUES (%s) ON DUPLICATE KEY UPDATE {{ tab.AutoIncrement.ColumnName }} = LAST_INSERT_ID({{ tab.AutoIncrement.ColumnName }}), %s", strings.Join(insertColList, ", "), strings.Join(insertValList, ", "), strings.Join(setList, ", "))
+		res, err := {{ DB.ObjName }}.Exec(stmtStr)
 		if err != nil {
 			return err
 		}
-		{{Block}}
-		res, err := {{Table>ModelName}}InsertStmt.Exec(argList...)
+		lastInsertID, err := res.LastInsertId()
 		if err != nil {
 			return err
 		}
-		lastInsertId, err := res.LastInsertId()
-		if err != nil {
-			return err
-		}
-		m.{{Table>AutoIncrement>FieldName}} = &lastInsertId
-		m._IsStored = true
+		m.{{ tab.AutoIncrement.FieldName }}.Set(lastInsertID)
 		return nil
-}`
-
-//modelUpdateMethodTemp XXX.Update() method template
-const modelUpdateMethodTemp = `func (m *{{Table>ModelName}}) Update() error {
-	if !m._IsStored {
-		return nbmysql.ErrModelNotStoredInDB
 	}
-	err := m.check()
-	if err != nil {
-		return err
-	}
-	{{Block}}
-	argList = append(argList, m.{{Table>AutoIncrement>FieldName}})
-	_, err = {{Table>ModelName}}UpdateStmt.Exec(argList...)
-	if err != nil {
-		return err
-	}
-	return nil
-}`
-
-//modelInsertOrUpdateMethodTemp XXX.InsertOrUpdate() method template
-const modelInsertOrUpdateMethodTemp = `func (m *{{Table>ModelName}}) InsertOrUpdate() error {
-	err := m.check()
-	if err != nil {
-		return err
-	}
-	{{Block}}
-	argList = append(argList, argList...)
-	res, err := {{Table>ModelName}}InsertOrUpdateStmt.Exec(argList...)
-	if err != nil {
-		return err
-	}
-	lastInsertId, err := res.LastInsertId()
-	if err != nil {
-		return err
-	}
-	m.{{Table>AutoIncrement>FieldName}} = &lastInsertId
-	m._IsStored = true
-	return nil
-}`
-
-//modelDeleteMethodTemp XXX.Delete() method template
-const modelDeleteMethodTemp = `func (m *{{Table>ModelName}}) Delete() error {
-	if !m._IsStored {
-		return nbmysql.ErrModelNotStoredInDB
-	}
-	_, err := {{Table>ModelName}}DeleteStmt.Exec(m.{{Table>AutoIncrement>FieldName}})
-	if err != nil {
-		return err
-	}
-	m._IsStored = false
-	return nil
-	}`
+{{ endfor }}`
 
 //newMiddleTypeTemp craete middle type template
-const newMiddleTypeTemp = `_{{Column>ArgName}} := new(nbmysql.{{Column>MidType}})`
+// const newMiddleTypeTemp = `_{{Column.ArgName}} := new(nbmysql.{{Column.MidType}})`
 
-//modelFromRowsFuncTemp XXXFromRows() function template
-const modelFromRowsFuncTemp = `func {{Table>ModelName}}FromRows(rows *sql.Rows) (*{{Table>ModelName}}, error) {
-		{{Block}}
-		err := rows.Scan({{MidArgs}})
-		if err != nil {
-			return nil, err
-		}
-		return &{{Table>ModelName}}{
-			{{MidToGos}}, true}, nil
-	}`
-
-//modelFromRowFuncTemp XXXFromRow() function template
-const modelFromRowFuncTemp = `func {{Table>ModelName}}FromRow(row *sql.Row) (*{{Table>ModelName}}, error) {
-	{{Block}}
-	err := row.Scan({{MidArgs}})
-	if err != nil {
-		return nil, err
+const modelCheckMethodTemp = `{{ for _, tab in DB.Tables }}
+	func (m *{{ tab.ModelName }}) check() error {
+		{{ for _, col in tab.Columns }}
+			{{ if col.ColumnName != tab.AutoIncrement.ColumnName && col.Nullable == false && col.Default == "" }}
+				if !m.{{ col.FieldName }}.IsValid() || m.{{ col.FieldName }}.IsNull() {
+					return errors.New("the {{ col.FieldName }} of {{ tab.ModelName }} cannot be null")
+				}
+			{{ endif }}
+		{{ endfor }}
+		return nil
 	}
-	return &{{Table>ModelName}}{
-		{{MidToGos}}, true}, nil
-}`
+{{ endfor }}`
 
-const fieldCheckNullTemp = `if m.{{Column>FieldName}} == nil {
-	return errors.New("{{Table>ModelName}}.{{Column>FieldName}} can not be null")
-	}`
+const insertStmtTemp = `var {{Table.ModelName}}InsertStmt *sql.Stmt`
 
-const modelCheckMethodTemp = `func (m *{{Table>ModelName}}) check() error {
-	{{Block}}
-	return nil
-	}`
+const updateStmtTemp = `var {{Table.ModelName}}UpdateStmt *sql.Stmt`
 
-const insertStmtTemp = `var {{Table>ModelName}}InsertStmt *sql.Stmt`
+const deleteStmtTemp = `var {{Table.ModelName}}DeleteStmt *sql.Stmt`
 
-const updateStmtTemp = `var {{Table>ModelName}}UpdateStmt *sql.Stmt`
+const insertOrUpdateStmtTemp = `var {{Table.ModelName}}InsertOrUpdateStmt *sql.Stmt`
 
-const deleteStmtTemp = `var {{Table>ModelName}}DeleteStmt *sql.Stmt`
+const insertMidStmtTemp = `var {{Table.ModelName}}To{{MTM.DstTab.ModelName}}InsertStmt *sql.Stmt`
 
-const insertOrUpdateStmtTemp = `var {{Table>ModelName}}InsertOrUpdateStmt *sql.Stmt`
+const manyToManyDeleteStmtTemp = `var {{Table.ModelName}}To{{MTM.DstTab.ModelName}}DeleteStmt *sql.Stmt`
 
-const insertMidStmtTemp = `var {{Table>ModelName}}To{{MTM>DstTab>ModelName}}InsertStmt *sql.Stmt`
-
-const manyToManyDeleteStmtTemp = `var {{Table>ModelName}}To{{MTM>DstTab>ModelName}}DeleteStmt *sql.Stmt`
-
-const insertStmtInitTemp = `{{Table>ModelName}}InsertStmt, err = {{Database>ObjName}}.Prepare("INSERT INTO {{Table>TableName}} ({{Columns}}) VALUES ({{Values}})")
+const insertStmtInitTemp = `{{Table.ModelName}}InsertStmt, err = {{Database.ObjName}}.Prepare("INSERT INTO {{Table.TableName}} ({{Columns}}) VALUES ({{Values}})")
 if err != nil {
 	log.Fatal(err)
 	}`
 
-const updateStmtInitTemp = `{{Table>ModelName}}UpdateStmt, err = {{Database>ObjName}}.Prepare("UPDATE {{Table>TableName}} SET {{Updates}} WHERE {{Table>AutoIncrement>ColumnName}} = ?")
+const updateStmtInitTemp = `{{Table.ModelName}}UpdateStmt, err = {{Database.ObjName}}.Prepare("UPDATE {{Table.TableName}} SET {{Updates}} WHERE {{Table.AutoIncrement.ColumnName}} = ?")
 if err != nil {
 	log.Fatal(err)
 	}`
 
-const deleteStmtInitTemp = `{{Table>ModelName}}DeleteStmt, err = {{Database>ObjName}}.Prepare("DELETE FROM {{Table>TableName}} WHERE {{Table>AutoIncrement>ColumnName}} = ?")
+const deleteStmtInitTemp = `{{Table.ModelName}}DeleteStmt, err = {{Database.ObjName}}.Prepare("DELETE FROM {{Table.TableName}} WHERE {{Table.AutoIncrement.ColumnName}} = ?")
 if err != nil {
 	log.Fatal(err)
 	}`
 
-const updateLastInsertIDTemp = `{{Table>AutoIncrement>ColumnName}} = LAST_INSERT_ID({{Table>AutoIncrement>ColumnName}})`
+const updateLastInsertIDTemp = `{{Table.AutoIncrement.ColumnName}} = LAST_INSERT_ID({{Table.AutoIncrement.ColumnName}})`
 
-const insertOrUpdateStmtInitTemp = `{{Table>ModelName}}InsertOrUpdateStmt, err = {{Database>ObjName}}.Prepare("INSERT INTO {{Table>TableName}} ({{Columns}}) VALUES ({{Values}}) ON DUPLICATE KEY UPDATE {{UpdateLastInsertID}}, {{Updates}}")
+const insertOrUpdateStmtInitTemp = `{{Table.ModelName}}InsertOrUpdateStmt, err = {{Database.ObjName}}.Prepare("INSERT INTO {{Table.TableName}} ({{Columns}}) VALUES ({{Values}}) ON DUPLICATE KEY UPDATE {{UpdateLastInsertID}}, {{Updates}}")
 if err != nil {
 	log.Fatal(err)
 	}`
 
-const insertMidStmtInitTemp = `{{Table>ModelName}}To{{MTM>DstTab>ModelName}}InsertStmt, err = {{Database>ObjName}}.Prepare("INSERT INTO {{MTM>MidTab>TableName}} ({{MTM>MidLeftCol>ColumnName}}, {{MTM>MidRightCol>ColumnName}}) VALUES (?, ?)")
+const insertMidStmtInitTemp = `{{Table.ModelName}}To{{MTM.DstTab.ModelName}}InsertStmt, err = {{Database.ObjName}}.Prepare("INSERT INTO {{MTM.MidTab.TableName}} ({{MTM.MidLeftCol.ColumnName}}, {{MTM.MidRightCol.ColumnName}}) VALUES (?, ?)")
 if err != nil {
 	log.Fatal(err)
 	}`
 
-const manyToManyDeleteStmtInitTemp = `{{Table>ModelName}}To{{MTM>DstTab>ModelName}}DeleteStmt, err = {{Database>ObjName}}.Prepare("DELETE FROM {{MTM>MidTab>TableName}} WHERE {{MTM>MidLeftCol>ColumnName}} = ? AND {{MTM>MidRightCol>ColumnName}} = ?")`
+const manyToManyDeleteStmtInitTemp = `{{Table.ModelName}}To{{MTM.DstTab.ModelName}}DeleteStmt, err = {{Database.ObjName}}.Prepare("DELETE FROM {{MTM.MidTab.TableName}} WHERE {{MTM.MidLeftCol.ColumnName}} = ? AND {{MTM.MidRightCol.ColumnName}} = ?")`
 
 //FuncArgNameTemp arguments name in function body template
-const funcArgNameTemp = `{{Column>ArgName}}`
+const funcArgNameTemp = `{{Column.ArgName}}`
 
-const updateColumnTemp = `{{Column>ColumnName}} = ?`
+const updateColumnTemp = `{{Column.ColumnName}} = ?`
 
-const modelListTypeTemp = `type {{Table>ModelName}}List struct {
-	Models []*{{Table>ModelName}}
-	Funcs []func(i, j int) int
-	}`
+const modelListTypeTemp = `type modelList interface {
+Len() int
+Swap(i, j int)
+}
+type sortObj struct {
+	list modelList
+	lessFuncs []func(i, j int) int
+}
 
-const modelCompareByIntMethodTemp = `By{{Column>FieldName}}: func(i, j int) int {
-	if *ml.Models[i].{{Column>FieldName}} == *ml.Models[j].{{Column>FieldName}} {
+func (so sortObj) Len() int {
+	return so.list.Len()
+}
+
+func (so sortObj) Swap(i, j int) {
+	so.list.Swap(i, j)
+}
+
+func (so sortObj) Less(i, j int) bool {
+	for _, f := range so.lessFuncs {
+		v := f(i, j)
+		switch v {
+		case -1:
+			return true
+		case 0:
+			continue
+		case 1:
+			return false
+		}
+	}
+	return false
+}
+
+type sortFunc func() func(i, j int) int 
+
+{{ for _, tab in DB.Tables }}
+	type {{ tab.ModelName }}List []*{{ tab.ModelName }}
+
+	func (l {{ tab.ModelName }}List) Len() int {
+		return len(l)
+	}
+
+	func (l {{ tab.ModelName }}List) Swap(i, j int) {
+		l[i], l[j] = l[j], l[i]
+	}
+
+	{{ for _, col in tab.Columns }}
+		func (l {{ tab.ModelName }}List) By{{ col.FieldName }}() func(i, j int) int {
+			{{ switch col.FieldType }}
+				{{ case "string" }}
+					f := func(i, j int) int {
+						ival, _, _ := l[i].Get{{ col.FieldName }}()
+						jval, _, _ := l[j].Get{{ col.FieldName }}()
+						switch {
+						case ival<jval:
+							return -1
+						case ival > jval:
+							return 1
+						default:
+							return 0
+						}
+					}
+					return f
+				{{ case "int64" }}
+					f := func(i, j int) int {
+						ival, _, _ := l[i].Get{{ col.FieldName }}()
+						jval, _, _ := l[j].Get{{ col.FieldName }}()
+						switch {
+						case ival<jval:
+							return -1
+						case ival > jval:
+							return 1
+						default:
+							return 0
+						}
+					}
+					return f
+				{{ case "float64" }}
+					f := func(i, j int) int {
+						ival, _, _ := l[i].Get{{ col.FieldName }}()
+						jval, _, _ := l[j].Get{{ col.FieldName }}()
+						switch {
+						case ival<jval:
+							return -1
+						case ival > jval:
+							return 1
+						default:
+							return 0
+						}
+					}
+					return f
+				{{ case "bool" }}
+					f := func(i, j int) int {
+						ival, _, _ := l[i].Get{{ col.FieldName }}()
+						jval, _, _ := l[j].Get{{ col.FieldName }}()
+						var ii, ji int
+						if ival {
+							ii = 1
+						}
+						if jval {
+							ji = 1
+						}
+						switch {
+						case ii < ji:
+							return -1
+						case ii > ji:
+							return 1
+						default:
+							return 0
+						}
+					}
+					return f
+				{{ case "time.Time" }}
+					f := func(i, j int) int {
+						ival, _, _ := l[i].Get{{ col.FieldName }}()
+						jval, _, _ := l[j].Get{{ col.FieldName }}()
+						switch {
+						case ival.Before(jval):
+							return -1
+						case ival.After(jval):
+							return 1
+						default:
+							return 0
+						}
+					}
+					return f
+			{{ endswitch }}
+		}
+	{{ endfor }}
+	func (l {{ tab.ModelName }}List) Sort(reverse bool, funcs ...sortFunc) {
+		if len(funcs) == 0 {
+			return
+		}
+		so := sortObj{list: l, lessFuncs: make([]func(i, j int) int, len(funcs))}
+		for i := range funcs {
+			so.lessFuncs[i] = funcs[i]()
+		}
+		if reverse {
+			sort.Sort(sort.Reverse(so))
+		} else {
+			sort.Sort(so)
+		}
+	}
+{{ endfor }}`
+
+const modelCompareByIntMethodTemp = `By{{Column.FieldName}}: func(i, j int) int {
+	if *ml.Models[i].{{Column.FieldName}} == *ml.Models[j].{{Column.FieldName}} {
 		return 0
 	}
-	if *ml.Models[i].{{Column>FieldName}} < *ml.Models[j].{{Column>FieldName}} {
+	if *ml.Models[i].{{Column.FieldName}} < *ml.Models[j].{{Column.FieldName}} {
 		return -1
 	}
 	return 1
 	},`
 
-const modelCompareByFloatMethodTemp = `By{{Column>FieldName}}: func(i, j int) int {
-	if *ml.Models[i].{{Column>FieldName}} == *ml.Models[j].{{Column>FieldName}} {
+const modelCompareByFloatMethodTemp = `By{{Column.FieldName}}: func(i, j int) int {
+	if *ml.Models[i].{{Column.FieldName}} == *ml.Models[j].{{Column.FieldName}} {
 		return 0
 	}
-	if *ml.Models[i].{{Column>FieldName}} < *ml.Models[j].{{Column>FieldName}} {
+	if *ml.Models[i].{{Column.FieldName}} < *ml.Models[j].{{Column.FieldName}} {
 		return -1
 	}
 	return 1
 	},`
 
-const modelCompareByStringMethodTemp = `By{{Column>FieldName}}: func(i, j int) int {
-	if *ml.Models[i].{{Column>FieldName}} == *ml.Models[j].{{Column>FieldName}} {
+const modelCompareByStringMethodTemp = `By{{Column.FieldName}}: func(i, j int) int {
+	if *ml.Models[i].{{Column.FieldName}} == *ml.Models[j].{{Column.FieldName}} {
 		return 0
 	}
-	if *ml.Models[i].{{Column>FieldName}} < *ml.Models[j].{{Column>FieldName}} {
+	if *ml.Models[i].{{Column.FieldName}} < *ml.Models[j].{{Column.FieldName}} {
 		return -1
 	}
 	return 1
 	},`
 
-const modelCompareByBoolMethodTemp = `By{{Column>FieldName}}: func(i, j int) int {
-	if *ml.Models[i].{{Column>FieldName}} == *ml.Models[j].{{Column>FieldName}} {
+const modelCompareByBoolMethodTemp = `By{{Column.FieldName}}: func(i, j int) int {
+	if *ml.Models[i].{{Column.FieldName}} == *ml.Models[j].{{Column.FieldName}} {
 		return 0
 	}
-	if *ml.Models[i].{{Column>FieldName}} == false && *ml.Models[j].{{Column>FieldName}} == true {
+	if *ml.Models[i].{{Column.FieldName}} == false && *ml.Models[j].{{Column.FieldName}} == true {
 		return -1
 	}
 	return 1
 	},`
 
-const modelCompareByTimeMethodTemp = `By{{Column>FieldName}}: func(i, j int) int {
-	if ml.Models[i].{{Column>FieldName}}.Equal(*ml.Models[j].{{Column>FieldName}}) {
+const modelCompareByTimeMethodTemp = `By{{Column.FieldName}}: func(i, j int) int {
+	if ml.Models[i].{{Column.FieldName}}.Equal(*ml.Models[j].{{Column.FieldName}}) {
 		return 0
 	}
-	if ml.Models[i].{{Column>FieldName}}.Before(*ml.Models[j].{{Column>FieldName}}) {
+	if ml.Models[i].{{Column.FieldName}}.Before(*ml.Models[j].{{Column.FieldName}}) {
 		return -1
 	}
 	return 1
 	},`
 
-const modelSortMethodsStructFieldTypeTemp = `By{{Column>FieldName}} func(i, j int) int`
+const modelSortMethodsStructFieldTypeTemp = `By{{Column.FieldName}} func(i, j int) int`
 
-const modelSortMethodsStructTypeTemp = `type {{Table>ModelName}}SortMethods struct {
+const modelSortMethodsStructTypeTemp = `type {{Table.ModelName}}SortMethods struct {
 	{{FieldTypeBlock}}
 	}`
 
-const modelSortMethodsStructFuncTemp = `func (ml {{Table>ModelName}}List) SortMethods() {{Table>ModelName}}SortMethods {
-	return {{Table>ModelName}}SortMethods{
+const modelSortMethodsStructFuncTemp = `func (ml {{Table.ModelName}}List) SortMethods() {{Table.ModelName}}SortMethods {
+	return {{Table.ModelName}}SortMethods{
 		{{CompareMethodBlock}}
 		}
 	}`
 
-const modelListLenMethodTemp = `func (ml {{Table>>ModelName}}List) Len() int {
+const modelListLenMethodTemp = `func (ml {{Table.ModelName}}List) Len() int {
 	return len(ml.Models)
 	}`
 
-const modelListSwapMethodTemp = `func (ml {{Table>ModelName}}List) Swap(i, j int) {
+const modelListSwapMethodTemp = `func (ml {{Table.ModelName}}List) Swap(i, j int) {
 	ml.Models[i], ml.Models[j] = ml.Models[j], ml.Models[i]
 	}`
 
-const modelListLessMethodTemp = `func (ml {{Table>ModelName}}List) Less(i, j int) bool {
+const modelListLessMethodTemp = `func (ml {{Table.ModelName}}List) Less(i, j int) bool {
 	var less bool
 	for _, f := range ml.Funcs {
 		res := f(i, j)
@@ -545,39 +642,283 @@ const modelListLessMethodTemp = `func (ml {{Table>ModelName}}List) Less(i, j int
 	return less
 }`
 
-const modelSortFuncSwitchBlockTemp = `case "{{Column>FieldName}}": 
-	{{Table>ArgName}}List.Funcs = append({{Table>ArgName}}List.Funcs, sortMethods.By{{Column>FieldName}})`
+const modelSortFuncSwitchBlockTemp = `case "{{Column.FieldName}}": 
+	{{Table.ArgName}}List.Funcs = append({{Table.ArgName}}List.Funcs, sortMethods.By{{Column.FieldName}})`
 
-const modelSortFuncTemp = `func {{Table>ModelName}}SortBy(ml []*{{Table>ModelName}}, desc bool, fields ...string) {
-	{{Table>ArgName}}List := {{Table>ModelName}}List {
+const modelSortFuncTemp = `func {{Table.ModelName}}SortBy(ml []*{{Table.ModelName}}, desc bool, fields ...string) {
+	{{Table.ArgName}}List := {{Table.ModelName}}List {
 		Models: ml,
 		Funcs: make([]func(i, j int) int, 0, {{ColumnNumber}}),
 		}
-	sortMethods := {{Table>ArgName}}List.SortMethods()
+	sortMethods := {{Table.ArgName}}List.SortMethods()
 	for _, field := range fields {
 		switch field {
 			{{SwitchBlock}}
 		}
 	}
 	if desc {
-		sort.Sort(sort.Reverse({{Table>ArgName}}List))
+		sort.Sort(sort.Reverse({{Table.ArgName}}List))
 	} else {
-		sort.Sort({{Table>ArgName}}List)
+		sort.Sort({{Table.ArgName}}List)
 	}
 }`
 
-const modelCountStmtDeclareTemp = `var {{Table>ModelName}}CountStmt *sql.Stmt`
-
-const modelCountStmtInitTemp = `{{Table>ModelName}}CountStmt, err = {{Database>ObjName}}.Prepare("SELECT COUNT(*) FROM {{Table>TableName}}")
-if err != nil {
-	log.Fatal(err)
-	}`
-
-const modelCountFuncTemp = `func {{Table>ModelName}}Count() (int64, error) {
-	var count int64
-	err := {{Table>ModelName}}CountStmt.QueryRow().Scan(&count)
-	if err != nil {
-		return -1, err
+const countFuncTemp = `{{ for _, tab in DB.Tables }}
+	func Count{{ tab.ModelName }}(where ...string) (int64, error) {
+		var count int64
+		var row *sql.Row
+		if len(where) == 0 {
+			row = {{ DB.ObjName }}.QueryRow("SELECT COUNT(*) FROM {{ tab.TableName }}")
+		} else {
+			row = {{ DB.ObjName }}.QueryRow(fmt.Sprintf("SELECT COUNT(*) FROM {{ tab.TableName }} WHERE %s", where[0]))
+		}
+		err := row.Scan(&count)
+		if err != nil {
+			return -1, err
+		}
+		return count, nil
 	}
-	return count, nil
-}`
+{{ endfor }}`
+
+const fieldTypeTemp = `type FieldArg interface {
+	columnName() string
+	tableName() string
+	sqlValue() string
+}
+{{ for _, tab in DB.Tables }}
+	{{ for _, col in tab.Columns }}
+		{{ switch col.FieldType }}
+			{{ case "int64" }}
+				type {{ tab.ModelName }}{{ col.FieldName }} int64
+				func New{{ tab.ModelName }}{{ col.FieldName }}(val int64) *{{ tab.ModelName }}{{ col.FieldName }} {
+					f := {{ tab.ModelName }}{{ col.FieldName }}(val)
+					return &f
+				}
+				func (f *{{ tab.ModelName }}{{ col.FieldName }}) columnName() string {
+					return "{{ col.ColumnName }}"
+				}
+				func (f *{{ tab.ModelName }}{{ col.FieldName }}) sqlValue() string {
+					return fmt.Sprintf("%d", *f)
+				}
+			{{ case "string" }}
+				type {{ tab.ModelName }}{{ col.FieldName }} string
+				func New{{ tab.ModelName }}{{ col.FieldName}}(val string) *{{ tab.ModelName }}{{ col.FieldName}} {
+					f := {{ tab.ModelName }}{{ col.FieldName }}(val)
+					return &f
+				}
+				func (f *{{ tab.ModelName }}{{ col.FieldName }}) columnName() string {
+					return "{{ col.ColumnName }}"
+				}
+				func (f *{{ tab.ModelName }}{{ col.FieldName }}) sqlValue() string {
+					return fmt.Sprintf("%q", *f)
+				}
+			{{ case "float64" }}
+				type {{ table.ModelName }}{{ col.FieldName }} float64
+				func New{{ tab.ModelName }}{{ col.FieldName }}(val float64) *{{ tab.ModelName }}{{ col.FieldName }} {
+					f := {{ tab.ModelName }}{{ col.FieldName }}(val)
+					return &f
+				}
+				func (f *{{ tab.ModelName }}{{ col.FieldName }}) columnName() string {
+					return "{{ col.ColumnName }}"
+				}
+				func (f *{{ tab.ModelName }}{{ col.FieldName }}) sqlValue() string {
+					return fmt.Sprintf("%f", *f)
+				}
+			{{ case "bool" }}
+				type {{ tab.ModelName }}{{ col.FieldName }} bool
+				func New{{ tab.ModelName }}{{ col.FieldName }}(val bool) *{{ tab.ModelName }}{{ col.FieldName }} {
+					f := {{ tab.ModelName }}{{ col.FieldName }}(val)
+					return &f
+				}
+				func (f *{{ tab.ModelName }}{{ col.FieldName }}) columnName() string {
+					return "{{ col.ColumnName }}"
+				}
+				func (f *{{ tab.ModelName }}{{ col.FieldName }}) sqlValue() string {
+					return fmt.Sprintf("%t", *f)
+				}
+			{{ case "time.Time" }}
+				type {{ tab.ModelName }}{{ col.FieldName }} time.Time
+				func New{{ tab.ModelName }}{{ col.FieldName }}(val time.Time) *{{ tab.ModelName }}{{ col.FieldName }}{
+					f := {{ tab.ModelName }}{{ col.FieldName }}(val)
+					return &f
+				}
+				func (f *{{ tab.ModelName }}{{ col.FieldName }}) columnName() string {
+					return "{{ col.ColumnName }}"
+				}
+				func (f *{{ tab.ModelName }}{{ col.FieldName }}) sqlValue() string {
+					{{ switch col.MySqlType }}
+						{{ case "DATE" }}
+							return time.Time(*f).Format("2006-01-02")
+						{{ case "DATETIME" }}
+							return time.Time(*f).Format("2006-01-02 15:04:05")
+						{{ case "TIMESTAMP" }}
+							return time.Time(*f).Format("2006-01-02 15:04:05")
+					{{ endswitch }}
+				}
+		{{ endswitch }}
+		func (f *{{ tab.ModelName}}{{ col.FieldName}}) tableName() string {
+			return "{{ tab.TableName }}"
+		}
+	{{ endfor }}
+{{ endfor }}
+`
+
+const modelInsertFuncTemp = `{{ for _, tab in DB.Tables }}
+	func {{ tab.ModelName }}Insert(fields ...FieldArg) (*{{ tab.ModelName }}, error) {
+		m, err := New{{ tab.ModelName }}(fields...)
+		if err != nil {
+			return nil, err
+		}
+		colList := make([]string, len(fields))
+		valList := make([]string, len(fields))
+		for i, f := range fields {
+			colList[i] = f.columnName()
+			valList[i] = f.sqlValue()
+		}
+		stmtStr := fmt.Sprintf("INSERT INTO {{ tab.TableName }} (%s) VALUES (%s)", strings.Join(colList, ", "), strings.Join(valList, ", "))
+		res, err := {{ DB.ObjName }}.Exec(stmtStr)
+		if err != nil {
+			return nil, err
+			}
+		lastInsertId, err := res.LastInsertId()
+		if err != nil {
+			return nil, err
+		}
+		m.{{ tab.AutoIncrement.FieldName }}.Set(lastInsertId)
+		return m, nil
+		}
+{{ endfor }}`
+
+const newModelFuncTemp = `{{ for _, tab in DB.Tables }}
+func New{{ tab.ModelName }}(fields ...FieldArg) (*{{ tab.ModelName }}, error) {
+	m := &{{ tab.ModelName }}{}
+	for _, field := range fields {
+		switch f := field.(type) {
+		{{ for _, col in tab.Columns }}
+		case *{{ tab.ModelName }}{{ col.FieldName }}:
+			if f == nil {
+				{{ switch col.FieldType }}
+					{{ case "string" }}
+						m.{{ col.FieldName }}.Set("", true)
+					{{ case "int64" }}
+						m.{{ col.FieldName }}.Set(0, true)
+					{{ case "float64" }}
+						m.{{ col.FieldName }}.Set(0.0, true)
+					{{ case "bool" }}
+						m.{{ col.FieldName }}.Set(false, false)
+					{{ case "time.Time" }}
+						m.{{ col.FieldName }}.Set(time.Time{}, false)
+				{{ endswitch }}
+			}
+			m.{{ col.FieldName }}.Set({{ col.FieldType }}(*f))
+		{{ endfor }}
+		default:
+			return nil, errors.New("invalid field in New{{ tab.ModelName }}()")
+		}
+	}
+	return m, nil
+}
+{{ endfor }}`
+
+const modelTypeTemp = `{{ for _, tab in DB.Tables }}
+	type {{ tab.ModelName }} struct {
+		{{ for _, col in tab.Columns }}
+			{{ switch col.FieldType }}
+				{{ case "string" }}
+					{{ col.FieldName }} nbmysql.StringField
+				{{ case "int64" }}
+					{{ col.FieldName }} nbmysql.IntField
+				{{ case "float64" }}
+					{{ col.FieldName }} nbmysql.FloatField
+				{{ case "bool" }}
+					{{ col.FieldName }} nbmysql.BoolField
+				{{ case "time.Time" }}
+					{{ switch col.MySqlType }}
+						{{ case "DATE" }}
+							{{ col.FieldName }} nbmysql.DateField
+						{{ case "DATETIME" }}
+							{{ col.FieldName }} nbmysql.DatetimeField
+						{{ case "TIMESTAMP" }}
+							{{ col.FieldName }} nbmysql.DatetimeField
+					{{ endswitch }}
+			{{ endswitch }}
+		{{ endfor }}
+	}
+	{{ for _, col in tab.Columns }}
+		func (m *{{ tab.ModelName }})Get{{ col.FieldName }}() (val {{ col.FieldType }}, valid bool, null bool) {
+			return m.{{ col.FieldName }}.Get()
+		}
+		func (m *{{ tab.ModelName }})Set{{ col.FieldName }}(val {{ col.FieldType }}, nullAndValid ...bool) {
+			m.{{ col.FieldName }}.Set(val, nullAndValid...)
+		}
+	{{ endfor }}
+{{ endfor }}
+`
+const updateFuncTemp = `{{ for _, tab in DB.Tables }}
+	func Update{{ tab.ModelName }}(where string, update ...FieldArg) error {
+		if len(update) == 0 {
+			return errors.New("Update{{ tab.ModelName }}() error: update list cannot be empty")
+		}
+		for k, v := range {{ tab.ModelName }}Map {
+			where = strings.Replace(where, k, v, -1)
+		}
+		setList := make([]string, len(update))
+		for i, f := range update {
+			if f.tableName() != "{{ tab.TableName }}" {
+				return fmt.Errorf("Update{{ tab.ModelName }}() error: %T not belong to {{ tab.ModelName }}", f)
+			}
+			if f == nil {
+				setList[i] = f.columnName() + "=" + "NULL"
+			} else {
+				setList[i] = f.columnName() + "=" + f.sqlValue()
+			}
+		}
+		stmtStr := fmt.Sprintf("UPDATE {{ tab.TableName }} SET %s WHERE %s", strings.Join(setList, ", "), where)
+		_, err := {{ DB.ObjName }}.Exec(stmtStr)
+		return err
+	}
+{{ endfor }}`
+
+const modelInvalidateMethodTemp = `{{ for _, tab in DB.Tables }}
+	func (m *{{ tab.ModelName }}) invalidate() {
+		{{ for _, col in tab.Columns }}
+			m.{{ col.FieldName }}.Invalidate()
+		{{ endfor }}
+	}
+{{ endfor }}`
+
+const modelDeleteMethodTemp = `{{ for _, tab in DB.Tables }}
+	func (m *{{ tab.ModelName }}) Delete() error {
+		if !m.{{ tab.PrimaryKey.FieldName }}.IsValid() || m.{{ tab.PrimaryKey.FieldName }}.IsNull() {
+			return errors.New("{{ tab.ModelName }}.Delete() error: primary key is not valid")
+		}
+		stmtStr := fmt.Sprintf("DELETE FROM {{ tab.TableName }} WHERE {{ tab.PrimaryKey.ColumnName }} = %s", m.{{ tab.PrimaryKey.FieldName }}.SQLVal())
+		res, err := {{ DB.ObjName }}.Exec(stmtStr)
+		if err != nil {
+			return err
+		}
+		affectedRows, err := res.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if affectedRows == 0 {
+			return fmt.Errorf("{{ tab.ModelName }}.Delete() error: row not exists in {{ tab.TableName }}, primary Key(%s)", m.{{ tab.PrimaryKey.FieldName }}.SQLVal())
+		}
+		m.invalidate()
+		return nil
+	}
+{{ endfor }}`
+
+const deleteFuncTemp = `{{ for _, tab in DB.Tables }}
+	func Delete{{ tab.ModelName }}(where string) (int64, error) {
+		for k, v := range {{ tab.ModelName }}Map {
+			where = strings.Replace(where, k, v, -1)
+		}
+		stmtStr := fmt.Sprintf("DELETE FROM {{ tab.TableName }} WHERE %s", where)
+		res, err := {{ DB.ObjName }}.Exec(stmtStr)
+		if err != nil {
+			return -1, err
+		}
+		return res.RowsAffected()
+	}
+{{ endfor }}`

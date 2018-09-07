@@ -4,7 +4,9 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-sql-driver/mysql"
 )
@@ -148,4 +150,468 @@ func (db *Database) AddForeignKeyConstraint() error {
 		}
 	}
 	return nil
+}
+
+type StringField struct {
+	val   string
+	valid bool
+	null  bool
+}
+
+func (f *StringField) IsValid() bool {
+	return f.valid
+}
+
+func (f *StringField) IsNull() bool {
+	return f.null
+}
+
+func (f *StringField) Set(val string, nullAndValid ...bool) {
+	var valid bool
+	var null bool
+	switch len(nullAndValid) {
+	case 0:
+		valid = true
+		null = false
+	case 1:
+		valid = true
+		null = nullAndValid[0]
+	case 2:
+		null, valid = nullAndValid[0], nullAndValid[1]
+	default:
+		panic(fmt.Sprintf("invalid length of nullAndValid arguments in StringField.Set(): required 2 supported %d", len(nullAndValid)))
+	}
+	f.val = val
+	f.valid = valid
+	f.null = null
+}
+
+func (f *StringField) Get() (val string, valid bool, null bool) {
+	return f.val, f.valid, f.null
+}
+
+func (f *StringField) Scan(v interface{}) error {
+	f.valid = true
+	if v == nil {
+		f.null = true
+		return nil
+	}
+	f.null = false
+	switch val := v.(type) {
+	case []byte:
+		f.val = string(val)
+	case string:
+		f.val = val
+	default:
+		return fmt.Errorf("not supported value type for StringField: %T", val)
+	}
+	return nil
+}
+
+func (f *StringField) SQLVal() string {
+	return fmt.Sprintf("%q", f.val)
+}
+
+func (f *StringField) Invalidate() {
+	f.valid = false
+}
+
+func (f *StringField) MarshalJSON() ([]byte, error) {
+	if !f.valid {
+		return []byte("invalid"), nil
+	}
+	if f.null {
+		return []byte("NULL"), nil
+	}
+	return []byte(fmt.Sprintf("%q", f.val)), nil
+}
+
+type IntField struct {
+	val   int64
+	valid bool
+	null  bool
+}
+
+func (f *IntField) IsValid() bool {
+	return f.valid
+}
+
+func (f *IntField) IsNull() bool {
+	return f.null
+}
+
+func (f *IntField) Set(val int64, nullAndValid ...bool) {
+	var valid bool
+	var null bool
+	switch len(nullAndValid) {
+	case 0:
+		valid = true
+		null = false
+	case 1:
+		valid = true
+		null = nullAndValid[0]
+	case 2:
+		null, valid = nullAndValid[0], nullAndValid[1]
+	default:
+		panic(fmt.Sprintf("invalid length of nullAndValid arguments in IntField.Set(): required 2 supported %d", len(nullAndValid)))
+	}
+	f.val = val
+	f.valid = valid
+	f.null = null
+}
+
+func (f *IntField) Get() (val int64, valid bool, null bool) {
+	return f.val, f.valid, f.null
+}
+
+func (f *IntField) Scan(v interface{}) error {
+	f.valid = true
+	if v == nil {
+		f.null = true
+		return nil
+	}
+	f.null = false
+	switch val := v.(type) {
+	case []byte:
+		i64, err := strconv.ParseInt(string(val), 10, 64)
+		if err != nil {
+			return err
+		}
+		f.val = i64
+	case int64:
+		f.val = val
+	default:
+		return fmt.Errorf("not supported value type for IntField: %T", val)
+	}
+	return nil
+}
+
+func (f *IntField) SQLVal() string {
+	return fmt.Sprintf("%d", f.val)
+}
+
+func (f *IntField) Invalidate() {
+	f.valid = false
+}
+
+func (f *IntField) MarshalJSON() ([]byte, error) {
+	if !f.valid {
+		return []byte("invalid"), nil
+	}
+	if f.null {
+		return []byte("NULL"), nil
+	}
+	return []byte(strconv.FormatInt(f.val, 10)), nil
+}
+
+type FloatField struct {
+	val   float64
+	valid bool
+	null  bool
+}
+
+func (f *FloatField) IsValid() bool {
+	return f.valid
+}
+
+func (f *FloatField) IsNull() bool {
+	return f.null
+}
+
+func (f *FloatField) Set(val float64, nullAndValid ...bool) {
+	var valid bool
+	var null bool
+	switch len(nullAndValid) {
+	case 0:
+		valid = true
+		null = false
+	case 1:
+		valid = true
+		null = nullAndValid[0]
+	case 2:
+		null, valid = nullAndValid[0], nullAndValid[1]
+	default:
+		panic(fmt.Sprintf("invalid length of nullAndValid arguments in FloatField.Set(): required 2 supported %d", len(nullAndValid)))
+	}
+	f.val = val
+	f.valid = valid
+	f.null = null
+}
+
+func (f *FloatField) Get() (val float64, valid bool, null bool) {
+	return f.val, f.valid, f.null
+}
+
+func (f *FloatField) Scan(v interface{}) error {
+	f.valid = true
+	if v == nil {
+		f.null = true
+		return nil
+	}
+	f.null = false
+	switch val := v.(type) {
+	case []byte:
+		f64, err := strconv.ParseFloat(string(val), 64)
+		if err != nil {
+			return err
+		}
+		f.val = f64
+	case float64:
+		f.val = val
+	default:
+		return fmt.Errorf("not supported value type for IntField: %T", val)
+	}
+	return nil
+}
+
+func (f *FloatField) SQLVal() string {
+	return fmt.Sprintf("%f", f.val)
+}
+
+func (f *FloatField) Invalidate() {
+	f.valid = false
+}
+
+func (f *FloatField) MarshalJSON() ([]byte, error) {
+	if !f.valid {
+		return []byte("invalid"), nil
+	}
+	if f.null {
+		return []byte("NULL"), nil
+	}
+	return []byte(strconv.FormatFloat(f.val, 'f', -1, 64)), nil
+}
+
+type BoolField struct {
+	val   bool
+	valid bool
+	null  bool
+}
+
+func (f *BoolField) IsValid() bool {
+	return f.valid
+}
+
+func (f *BoolField) IsNull() bool {
+	return f.null
+}
+
+func (f *BoolField) Set(val bool, nullAndValid ...bool) {
+	var valid bool
+	var null bool
+	switch len(nullAndValid) {
+	case 0:
+		valid = true
+		null = false
+	case 1:
+		valid = true
+		null = nullAndValid[0]
+	case 2:
+		null, valid = nullAndValid[0], nullAndValid[1]
+	default:
+		panic(fmt.Sprintf("invalid length of nullAndValid arguments in BoolField.Set(): required 2 supported %d", len(nullAndValid)))
+	}
+	f.val = val
+	f.valid = valid
+	f.null = null
+}
+
+func (f *BoolField) Get() (val bool, valid bool, null bool) {
+	return f.val, f.valid, f.null
+}
+
+func (f *BoolField) Scan(v interface{}) error {
+	f.valid = true
+	if v == nil {
+		f.null = true
+		return nil
+	}
+	f.null = false
+	switch val := v.(type) {
+	case []byte:
+		b, err := strconv.ParseBool(string(val))
+		if err != nil {
+			return err
+		}
+		f.val = b
+	case bool:
+		f.val = val
+	default:
+		return fmt.Errorf("not supported value type for BoolField: %T", val)
+	}
+	return nil
+}
+
+func (f *BoolField) SQLVal() string {
+	return fmt.Sprintf("%t", f.val)
+}
+
+func (f *BoolField) Invalidate() {
+	f.valid = false
+}
+
+func (f *BoolField) MarshalJSON() ([]byte, error) {
+	if !f.valid {
+		return []byte("invalid"), nil
+	}
+	if f.null {
+		return []byte("NULL"), nil
+	}
+	return []byte(strconv.FormatBool(f.val)), nil
+}
+
+type DateField struct {
+	val   time.Time
+	valid bool
+	null  bool
+}
+
+func (f *DateField) IsValid() bool {
+	return f.valid
+}
+
+func (f *DateField) IsNull() bool {
+	return f.null
+}
+
+func (f *DateField) Set(val time.Time, nullAndValid ...bool) {
+	var valid bool
+	var null bool
+	switch len(nullAndValid) {
+	case 0:
+		valid = true
+		null = false
+	case 1:
+		valid = true
+		null = nullAndValid[0]
+	case 2:
+		null, valid = nullAndValid[0], nullAndValid[1]
+	default:
+		panic(fmt.Sprintf("invalid length of nullAndValid arguments in DateField.Set(): required 2 supported %d", len(nullAndValid)))
+	}
+	f.val = val
+	f.valid = valid
+	f.null = null
+}
+
+func (f *DateField) Get() (val time.Time, valid bool, null bool) {
+	return f.val, f.valid, f.null
+}
+
+func (f *DateField) Scan(v interface{}) error {
+	f.valid = true
+	if v == nil {
+		f.null = true
+		return nil
+	}
+	f.null = false
+	switch val := v.(type) {
+	case []byte:
+		t, err := time.Parse("2006-01-02", string(val))
+		if err != nil {
+			return err
+		}
+		f.val = t
+	case time.Time:
+		f.val = val
+	default:
+		return fmt.Errorf("not supported value type for DateField: %T", val)
+	}
+	return nil
+}
+
+func (f *DateField) SQLVal() string {
+	return f.val.Format("2006-01-02")
+}
+
+func (f *DateField) Invalidate() {
+	f.valid = false
+}
+
+func (f *DateField) MarshalJSON() ([]byte, error) {
+	if !f.valid {
+		return []byte("invalid"), nil
+	}
+	if f.null {
+		return []byte("NULL"), nil
+	}
+	return []byte(fmt.Sprintf("%q", f.val.Format("2006-01-02"))), nil
+}
+
+type DatetimeField struct {
+	val   time.Time
+	valid bool
+	null  bool
+}
+
+func (f *DatetimeField) IsValid() bool {
+	return f.valid
+}
+
+func (f *DatetimeField) IsNull() bool {
+	return f.null
+}
+
+func (f *DatetimeField) Set(val time.Time, nullAndValid ...bool) {
+	var valid bool
+	var null bool
+	switch len(nullAndValid) {
+	case 0:
+		valid = true
+		null = false
+	case 1:
+		valid = true
+		null = nullAndValid[0]
+	case 2:
+		null, valid = nullAndValid[0], nullAndValid[1]
+	default:
+		panic(fmt.Sprintf("invalid length of nullAndValid arguments in DatetimeField.Set(): required 2 supported %d", len(nullAndValid)))
+	}
+	f.val = val
+	f.valid = valid
+	f.null = null
+}
+
+func (f *DatetimeField) Get() (val time.Time, valid bool, null bool) {
+	return f.val, f.valid, f.null
+}
+
+func (f *DatetimeField) Scan(v interface{}) error {
+	f.valid = true
+	if v == nil {
+		f.null = true
+		return nil
+	}
+	f.null = false
+	switch val := v.(type) {
+	case []byte:
+		t, err := time.Parse("2006-01-02 15:04:05", string(val))
+		if err != nil {
+			return err
+		}
+		f.val = t
+	case time.Time:
+		f.val = val
+	default:
+		return fmt.Errorf("not supported value type for DatetimeField: %T", val)
+	}
+	return nil
+}
+
+func (f *DatetimeField) SQLVal() string {
+	return f.val.Format("2006-01-02 15:04:05")
+}
+
+func (f *DatetimeField) Invalidate() {
+	f.valid = false
+}
+
+func (f *DatetimeField) MarshalJSON() ([]byte, error) {
+	if !f.valid {
+		return []byte("invalid"), nil
+	}
+	if f.null {
+		return []byte("NULL"), nil
+	}
+	return []byte(fmt.Sprintf("%q", f.val.Format("2006-01-02 15:04:05"))), nil
 }
