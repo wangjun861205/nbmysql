@@ -242,17 +242,6 @@ const manyToManyMethodTemp = `{{ for _, tab in DB.Tables }}
 	{{ endfor }}
 {{ endfor }}`
 
-const stmtArgNilToDefaultTemp = `if m.{{Column.FieldName}} == nil {
-	argList = append(argList, {{DefaultValue}})
-	} else {
-	argList = append(argList, m.{{Column.FieldName}})
-	}`
-
-const stmtArgTemp = `argList = append(argList, m.{{Column.FieldName}})`
-
-const stmtArgNilToDefaultBlockTemp = `argList := make([]interface{}, 0, {{Length}})
-{{Block}}`
-
 const modelInsertMethodTemp = `{{ for _, tab in DB.Tables }}
 func (m *{{ tab.ModelName }})Insert() error {
 	colList := make([]string, 0, 16)
@@ -271,6 +260,26 @@ func (m *{{ tab.ModelName }})Insert() error {
 	stmtStr := fmt.Sprintf("INSERT INTO {{ tab.TableName }} (%s) VALUES (%s)", strings.Join(colList, ", "), strings.Join(valList, ", "))
 	_, err := {{ DB.ObjName }}.Exec(stmtStr)
 	return err
+}
+{{ endfor }}`
+
+const insertStmtMethodTemp = `{{ for _, tab in DB.Tables }}
+func (m *{{ tab.ModelName }})InsertStmt() *Stmt {
+	colList := make([]string, 0, 16)
+	valList := make([]string, 0, 16)
+	{{ for _, col in tab.Columns }}
+		if m.{{ col.FieldName }}.IsValid() {
+			if m.{{ col.FieldName }}.IsNull() {
+				colList = append(colList, {{ col.ColumnName }})
+				valList = append(valList, "NULL")
+			} else {
+				colList = append(colList, {{ col.ColumnName }})
+				valList = append(valList, m.{{ col.FieldName }}.SQLVal())
+			}
+		}
+	{{ endfor }}
+	stmtStr := fmt.Sprintf("INSERT INTO {{ tab.TableName }} (%s) VALUES (%s)", strings.Join(colList, ", "), strings.Join(valList, ", "))
+	return NewStmt(m, stmtStr)
 }
 {{ endfor }}`
 
@@ -304,8 +313,39 @@ const modelUpdateMethodTemp = `{{ for _, tab in DB.Tables }}
 		_, err := {{ DB.ObjName }}.Exec(stmtStr)
 		return err
 	}
-{{ endfor }}
-		`
+{{ endfor }}`
+
+const updateStmtMethodTemp = `{{ for _, tab in DB.Tables }}
+	func (m *{{ tab.ModelName }}) UpdateStmt() (*Stmt, error) {
+		colList := make([]string, 0, 16)
+		valList := make([]string, 0, 16)
+		if !m.{{ tab.PrimaryKey.FieldName }}.IsValid() || m.{{ tab.PrimaryKey.FieldName }}.IsNull() {
+			return nil, errors.New("{{ tab.ModelName }}.Update(): primary key cannot be invalid or null")
+		}
+		{{ for _, col in tab.Columns }}
+			{{ if col.ColumnName != tab.PrimaryKey.ColumnName }}
+				if m.{{ col.FieldName }}.IsValid() {
+					colList = append(colList, {{ col.ColumnName }})
+					if m.{{ col.FieldName }}.IsNull() {
+						valList = append(valList, "NULL")
+					} else {
+						valList = append(valList, m.{{ col.FieldName }}.SQLVal())
+					}
+				}
+			{{ endif }}
+		{{ endfor }}
+		if len(colList) == 0 {
+			return errors.New("no valid field to update")
+		}
+		setList := make([]string, len(colList))
+		for i := range colList {
+			setList[i] = colList[i] + "=" + valList[i]
+		}
+		stmtStr := fmt.Sprintf("UPDATE {{ tab.TableName }} SET %s WHERE {{ tab.PrimaryKey.ColumnName }} = %s", strings.Join(setList, ", "), m.{{ tab.PrimaryKey.FieldName }}.SQLVal())
+		return NewStmt(m, stmtStr), nil
+	}
+{{ endfor }}`
+
 const modelInsertOrUpdateMethodTemp = `{{ for _, tab in DB.Tables }}
 	func (m *{{ tab.ModelName }}) InsertOrUpdate() error {
 		insertColList := make([]string, 0, 16)
@@ -351,9 +391,6 @@ const modelInsertOrUpdateMethodTemp = `{{ for _, tab in DB.Tables }}
 	}
 {{ endfor }}`
 
-//newMiddleTypeTemp craete middle type template
-// const newMiddleTypeTemp = `_{{Column.ArgName}} := new(nbmysql.{{Column.MidType}})`
-
 const modelCheckMethodTemp = `{{ for _, tab in DB.Tables }}
 	func (m *{{ tab.ModelName }}) check() error {
 		{{ for _, col in tab.Columns }}
@@ -366,52 +403,6 @@ const modelCheckMethodTemp = `{{ for _, tab in DB.Tables }}
 		return nil
 	}
 {{ endfor }}`
-
-const insertStmtTemp = `var {{Table.ModelName}}InsertStmt *sql.Stmt`
-
-const updateStmtTemp = `var {{Table.ModelName}}UpdateStmt *sql.Stmt`
-
-const deleteStmtTemp = `var {{Table.ModelName}}DeleteStmt *sql.Stmt`
-
-const insertOrUpdateStmtTemp = `var {{Table.ModelName}}InsertOrUpdateStmt *sql.Stmt`
-
-const insertMidStmtTemp = `var {{Table.ModelName}}To{{MTM.DstTab.ModelName}}InsertStmt *sql.Stmt`
-
-const manyToManyDeleteStmtTemp = `var {{Table.ModelName}}To{{MTM.DstTab.ModelName}}DeleteStmt *sql.Stmt`
-
-const insertStmtInitTemp = `{{Table.ModelName}}InsertStmt, err = {{Database.ObjName}}.Prepare("INSERT INTO {{Table.TableName}} ({{Columns}}) VALUES ({{Values}})")
-if err != nil {
-	log.Fatal(err)
-	}`
-
-const updateStmtInitTemp = `{{Table.ModelName}}UpdateStmt, err = {{Database.ObjName}}.Prepare("UPDATE {{Table.TableName}} SET {{Updates}} WHERE {{Table.AutoIncrement.ColumnName}} = ?")
-if err != nil {
-	log.Fatal(err)
-	}`
-
-const deleteStmtInitTemp = `{{Table.ModelName}}DeleteStmt, err = {{Database.ObjName}}.Prepare("DELETE FROM {{Table.TableName}} WHERE {{Table.AutoIncrement.ColumnName}} = ?")
-if err != nil {
-	log.Fatal(err)
-	}`
-
-const updateLastInsertIDTemp = `{{Table.AutoIncrement.ColumnName}} = LAST_INSERT_ID({{Table.AutoIncrement.ColumnName}})`
-
-const insertOrUpdateStmtInitTemp = `{{Table.ModelName}}InsertOrUpdateStmt, err = {{Database.ObjName}}.Prepare("INSERT INTO {{Table.TableName}} ({{Columns}}) VALUES ({{Values}}) ON DUPLICATE KEY UPDATE {{UpdateLastInsertID}}, {{Updates}}")
-if err != nil {
-	log.Fatal(err)
-	}`
-
-const insertMidStmtInitTemp = `{{Table.ModelName}}To{{MTM.DstTab.ModelName}}InsertStmt, err = {{Database.ObjName}}.Prepare("INSERT INTO {{MTM.MidTab.TableName}} ({{MTM.MidLeftCol.ColumnName}}, {{MTM.MidRightCol.ColumnName}}) VALUES (?, ?)")
-if err != nil {
-	log.Fatal(err)
-	}`
-
-const manyToManyDeleteStmtInitTemp = `{{Table.ModelName}}To{{MTM.DstTab.ModelName}}DeleteStmt, err = {{Database.ObjName}}.Prepare("DELETE FROM {{MTM.MidTab.TableName}} WHERE {{MTM.MidLeftCol.ColumnName}} = ? AND {{MTM.MidRightCol.ColumnName}} = ?")`
-
-//FuncArgNameTemp arguments name in function body template
-const funcArgNameTemp = `{{Column.ArgName}}`
-
-const updateColumnTemp = `{{Column.ColumnName}} = ?`
 
 const modelListTypeTemp = `type modelList interface {
 Len() int
@@ -667,7 +658,7 @@ const fieldTypeTemp = `type FieldArg interface {
 `
 
 const modelInsertFuncTemp = `{{ for _, tab in DB.Tables }}
-	func {{ tab.ModelName }}Insert(fields ...FieldArg) (*{{ tab.ModelName }}, error) {
+	func Insert{{ tab.ModelName }}(fields ...FieldArg) (*{{ tab.ModelName }}, error) {
 		m, err := New{{ tab.ModelName }}(fields...)
 		if err != nil {
 			return nil, err
@@ -689,6 +680,19 @@ const modelInsertFuncTemp = `{{ for _, tab in DB.Tables }}
 		}
 		m.{{ tab.AutoIncrement.FieldName }}.Set(lastInsertId)
 		return m, nil
+		}
+{{ endfor }}`
+
+const insertStmtFuncTemp = `{{ for _, tab in DB.Tables }}
+	func Insert{{ tab.ModelName }}Stmt(fields ...FieldArg) *Stmt {
+		colList := make([]string, len(fields))
+		valList := make([]string, len(fields))
+		for i, f := range fields {
+			colList[i] = f.columnName()
+			valList[i] = f.sqlValue()
+		}
+		stmtStr := fmt.Sprintf("INSERT INTO {{ tab.TableName }} (%s) VALUES (%s)", strings.Join(colList, ", "), strings.Join(valList, ", "))
+		return NewStmt(nil, stmtStr)
 		}
 {{ endfor }}`
 
@@ -782,8 +786,32 @@ const updateFuncTemp = `{{ for _, tab in DB.Tables }}
 	}
 {{ endfor }}`
 
+const updateStmtFuncTemp = `{{ for _, tab in DB.Tables }}
+	func Update{{ tab.ModelName }}Stmt(where string, update ...FieldArg) (*Stmt, error) {
+		if len(update) == 0 {
+			return nil, errors.New("Update{{ tab.ModelName }}() error: update list cannot be empty")
+		}
+		for k, v := range {{ tab.ModelName }}Map {
+			where = strings.Replace(where, k, v, -1)
+		}
+		setList := make([]string, len(update))
+		for i, f := range update {
+			if f.tableName() != "{{ tab.TableName }}" {
+				return fmt.Errorf("Update{{ tab.ModelName }}() error: %T not belong to {{ tab.ModelName }}", f)
+			}
+			if f == nil {
+				setList[i] = f.columnName() + "=" + "NULL"
+			} else {
+				setList[i] = f.columnName() + "=" + f.sqlValue()
+			}
+		}
+		stmtStr := fmt.Sprintf("UPDATE {{ tab.TableName }} SET %s WHERE %s", strings.Join(setList, ", "), where)
+		return NewStmt(nil, stmtStr), nil
+	}
+{{ endfor }}`
+
 const modelInvalidateMethodTemp = `{{ for _, tab in DB.Tables }}
-	func (m *{{ tab.ModelName }}) invalidate() {
+	func (m *{{ tab.ModelName }}) Invalidate() {
 		{{ for _, col in tab.Columns }}
 			m.{{ col.FieldName }}.Invalidate()
 		{{ endfor }}
@@ -807,8 +835,18 @@ const modelDeleteMethodTemp = `{{ for _, tab in DB.Tables }}
 		if affectedRows == 0 {
 			return fmt.Errorf("{{ tab.ModelName }}.Delete() error: row not exists in {{ tab.TableName }}, primary Key(%s)", m.{{ tab.PrimaryKey.FieldName }}.SQLVal())
 		}
-		m.invalidate()
+		m.Invalidate()
 		return nil
+	}
+{{ endfor }}`
+
+const deleteStmtMethodTemp = `{{ for _, tab in DB.Tables }}
+	func (m *{{ tab.ModelName }}) DeleteStmt() (*Stmt, error) {
+		if !m.{{ tab.PrimaryKey.FieldName }}.IsValid() || m.{{ tab.PrimaryKey.FieldName }}.IsNull() {
+			return nil, errors.New("{{ tab.ModelName }}.Delete() error: primary key is not valid")
+		}
+		stmtStr := fmt.Sprintf("DELETE FROM {{ tab.TableName }} WHERE {{ tab.PrimaryKey.ColumnName }} = %s", m.{{ tab.PrimaryKey.FieldName }}.SQLVal())
+		return NewStmt(m, stmtStr), nil
 	}
 {{ endfor }}`
 
@@ -817,11 +855,183 @@ const deleteFuncTemp = `{{ for _, tab in DB.Tables }}
 		for k, v := range {{ tab.ModelName }}Map {
 			where = strings.Replace(where, k, v, -1)
 		}
-		stmtStr := fmt.Sprintf("DELETE FROM {{ tab.TableName }} WHERE %s", where)
+		var stmtStr string
+		if where != "" {
+			stmtStr = fmt.Sprintf("DELETE FROM {{ tab.TableName }} WHERE %s", where)
+		} else {
+			stmtStr = fmt.Sprintf("DELETE FROM {{ tab.TableName }}") 
+		}
 		res, err := {{ DB.ObjName }}.Exec(stmtStr)
 		if err != nil {
 			return -1, err
 		}
 		return res.RowsAffected()
+	}
+{{ endfor }}`
+
+const deleteStmtFuncTemp = `{{ for _, tab in DB.Tables }}
+	func Delete{{ tab.ModelName }}Stmt(where string) *Stmt {
+		for k, v := range {{ tab.ModelName }}Map {
+			where = strings.Replace(where, k, v, -1)
+		}
+		var stmtStr string
+		if where != "" {
+			stmtStr = fmt.Sprintf("DELETE FROM {{ tab.TableName }} WHERE %s", where)
+		} else {
+			stmtStr = fmt.Sprintf("DELETE FROM {{ tab.TableName }}") 
+		}
+		return NewStmt(nil, stmtStr)
+	}
+{{ endfor }}`
+
+const modelInterfaceTypeTemp = `type model interface {
+	Invalidate()
+	SetLastInsertID(int64)
+}`
+
+const setLastInsertIDMethodTemp = `{{ for _, tab in DB.Tables }}
+	func (m *{{ tab.ModelName }}) SetLastInsertID(id int64) {
+		m.{{ tab.AutoIncrement.FieldName }}.Set(id)
+	}
+{{ endfor }}`
+
+const stmtTypeTemp = `type stmtType int
+const (
+	insert stmtType = iota
+	update
+	delete
+	other
+)
+
+type Stmt struct {
+	model model
+	typ stmtType
+	stmt string
+	lastInsertID int64
+}
+
+func NewStmt(model model, stmtStr string) *Stmt {
+	stmt := &Stmt{model: model, stmt: stmtStr}
+	l := strings.Split(strings.ToUpper(stmtStr), " ")
+	switch l[0] {
+	case "INSERT":
+		stmt.typ = insert
+	case "UPDATE":
+		stmt.typ = update
+	case "DELETE":
+		stmt.typ = delete
+	default:
+		stmt.typ = other
+	}
+	return stmt
+}
+
+func (s *Stmt) Join(stmts ...*Stmt) StmtList {
+	l := make(StmtList, len(stmts) + 1)
+	l[0] = s
+	for i := 0; i < len(stmts); i++ {
+		l[i+1] = stmts[i]
+	}
+	return l
+}
+
+func (s *Stmt) Exec() error {
+	res, err := {{ DB.ObjName }}.Exec(s.stmt)
+	if err != nil {
+		return err
+	}
+	if s.model != nil {
+		switch s.typ {
+		case insert:
+			lastInsertID, err := res.LastInsertId()
+			if err != nil {
+				return err
+			}
+			s.model.SetLastInsertID(lastInsertID)
+		case delete:
+			s.model.Invalidate()
+		}
+	}
+	return nil
+}
+
+type StmtList []*Stmt
+
+func (sl StmtList) Exec() error {
+	tx, err := {{ DB.ObjName }}.Begin()
+	if err != nil {
+		return err
+	}
+	for _, s := range sl {
+		res, err := tx.Exec(s.stmt)
+		if err != nil {
+			tx.Rollback()
+			return err
+		}
+		if s.typ == insert && s.model != nil {
+			lastInsertID, err := res.LastInsertId()
+			if err != nil {
+				tx.Rollback()
+				return err
+			}
+			s.lastInsertID = lastInsertID
+		}
+	}
+	err = tx.Commit()
+	if err != nil {
+		return err
+	}
+	for _, s := range sl {
+		if s.model != nil {
+			switch s.typ {
+			case insert:
+				s.model.SetLastInsertID(s.lastInsertID)
+			case delete:
+				s.model.Invalidate()
+			}
+		}
+	}
+	return nil
+}
+
+func (sl StmtList) Join(sls ...StmtList) StmtList {
+	for _, l := range sls {
+		sl = append(sl, l...)
+	}
+	return sl
+	}`
+
+const modelDistinctMethodTemp = `{{ for _, tab in DB.Tables }}
+	{{ for _, col in tab.Columns }}
+		func (m *{{ tab.ModelName }}) DistBy{{ col.FieldName }}() string {
+			return m.{{ col.FieldName }}.SQLVal()
+		}
+	{{ endfor }}
+{{ endfor }}`
+
+const modelListDistinctMethodTemp = `{{ for _, tab in DB.Tables }}
+	func (l {{ tab.ModelName }}List) Distinct(fs ...func(*{{ tab.ModelName }}) string) {{ tab.ModelName }}List {
+		if len(fs) == 0 {
+			fs = append(fs, func(mm *{{ tab.ModelName }}) string {
+				return mm.{{ tab.PrimaryKey.FieldName }}.SQLVal()
+			})
+		}
+		m := make(map[string]bool)
+		filteredList := make({{ tab.ModelName }}List, 0, l.Len())
+		builder := strings.Builder{}
+		for _, model := range l {
+			for _, f := range fs {
+				builder.WriteString(f(model))
+			}
+			if exists := m[builder.String()]; exists {
+				builder.Reset()
+				continue
+			} else {
+				m[builder.String()] = true
+				filteredList = append(filteredList, model)
+				builder.Reset()
+			}
+		}
+		return filteredList
 	}
 {{ endfor }}`

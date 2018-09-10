@@ -2,12 +2,8 @@ package nbmysql
 
 import (
 	"bytes"
-	"fmt"
-	"log"
 	"os"
 	"os/exec"
-	"strconv"
-	"strings"
 
 	"github.com/wangjun861205/nbfmt"
 )
@@ -60,62 +56,6 @@ func genManyToManyMethod(db Database) (string, error) {
 	return nbfmt.Fmt(manyToManyMethodTemp, map[string]interface{}{"DB": db})
 }
 
-//genStmtArgNilToDefault generate block for replacing nil argument to default value in insert or update method when not null column value is nil
-func genStmtArgNilToDefault(col Column) string {
-	var value interface{}
-	var err error
-	switch col.FieldType {
-	case "int64":
-		value, err = strconv.ParseInt(col.Default, 10, 64)
-	case "float64":
-		value, err = strconv.ParseFloat(col.Default, 64)
-	case "bool":
-		value, err = strconv.ParseInt(col.Default, 10, 64)
-	case "string":
-		value = col.Default
-	case "time.Time":
-		if col.MySqlType == "DATE" {
-			value = "time.Now()"
-		} else {
-			value = "time.Now()"
-		}
-	}
-	if err != nil {
-		log.Fatal(err)
-	}
-	s, err := nbfmt.Fmt(stmtArgNilToDefaultTemp, map[string]interface{}{"Column": col, "DefaultValue": value})
-	if err != nil {
-		fmt.Println("error: genStmtArgNilToDefault() failed")
-		log.Fatal(err)
-	}
-	return s
-}
-
-//genStmtArgNilToDefaultBlock generate block to replacing nil arguments to default value
-func genStmtArgNilToDefaultBlock(tab Table) string {
-	list := make([]string, 0, len(tab.Columns))
-	for _, col := range tab.Columns {
-		if !col.AutoIncrement && col.Default != "CURRENT_TIMESTAMP" && col.On != "UPDATE CURRENT_TIMESTAMP" {
-			if !col.Nullable && col.Default != "" {
-				list = append(list, genStmtArgNilToDefault(col))
-			} else {
-				s, err := nbfmt.Fmt(stmtArgTemp, map[string]interface{}{"Column": col})
-				if err != nil {
-					fmt.Println("error: stmtArgTemp format failed")
-					log.Fatal(err)
-				}
-				list = append(list, s)
-			}
-		}
-	}
-	s, err := nbfmt.Fmt(stmtArgNilToDefaultBlockTemp, map[string]interface{}{"Length": len(list), "Block": strings.Join(list, "\n")})
-	if err != nil {
-		fmt.Println("error: genStmtArgNilToDefaultBlock() failed")
-		log.Fatal(err)
-	}
-	return s
-}
-
 func genModelInsertMethod(db Database) (string, error) {
 	return nbfmt.Fmt(modelInsertMethodTemp, map[string]interface{}{"DB": db})
 }
@@ -132,16 +72,6 @@ func genModelInsertOrUpdateMethod(db Database) (string, error) {
 func genModelDeleteMethod(db Database) (string, error) {
 	return nbfmt.Fmt(modelDeleteMethodTemp, map[string]interface{}{"DB": db})
 }
-
-//genNewMiddleTypeBlock generate new middle type consponsed to field type block
-// func genNewMiddleTypeBlock(col Column) string {
-// 	s, err := nbfmt.Fmt(newMiddleTypeTemp, map[string]interface{}{"Column": col})
-// 	if err != nil {
-// 		fmt.Println("error: genNewMiddleTypeBlock() failed")
-// 		log.Fatal(err)
-// 	}
-// 	return s
-// }
 
 func genFromRowsFunc(db Database) (string, error) {
 	return nbfmt.Fmt(fromRowsFuncTemp, map[string]interface{}{"DB": db})
@@ -181,6 +111,46 @@ func genModelInvalidateMethod(db Database) (string, error) {
 
 func genDeleteFunc(db Database) (string, error) {
 	return nbfmt.Fmt(deleteFuncTemp, map[string]interface{}{"DB": db})
+}
+
+func genSetLastInsertIDMethod(db Database) (string, error) {
+	return nbfmt.Fmt(setLastInsertIDMethodTemp, map[string]interface{}{"DB": db})
+}
+
+func genStmtType(db Database) (string, error) {
+	return nbfmt.Fmt(stmtTypeTemp, map[string]interface{}{"DB": db})
+}
+
+func genInsertStmtMethod(db Database) (string, error) {
+	return nbfmt.Fmt(insertStmtMethodTemp, map[string]interface{}{"DB": db})
+}
+
+func genInsertStmtFunc(db Database) (string, error) {
+	return nbfmt.Fmt(insertStmtFuncTemp, map[string]interface{}{"DB": db})
+}
+
+func genUpdateStmtMethod(db Database) (string, error) {
+	return nbfmt.Fmt(updateStmtMethodTemp, map[string]interface{}{"DB": db})
+}
+
+func genUpdateStmtFunc(db Database) (string, error) {
+	return nbfmt.Fmt(updateStmtFuncTemp, map[string]interface{}{"DB": db})
+}
+
+func genDeleteStmtMethod(db Database) (string, error) {
+	return nbfmt.Fmt(deleteStmtMethodTemp, map[string]interface{}{"DB": db})
+}
+
+func genDeleteStmtFunc(db Database) (string, error) {
+	return nbfmt.Fmt(deleteStmtFuncTemp, map[string]interface{}{"DB": db})
+}
+
+func genModelDistinctMethod(db Database) (string, error) {
+	return nbfmt.Fmt(modelDistinctMethodTemp, map[string]interface{}{"DB": db})
+}
+
+func genModelListDistinctMethod(db Database) (string, error) {
+	return nbfmt.Fmt(modelListDistinctMethodTemp, map[string]interface{}{"DB": db})
 }
 
 //Gen generate database definition
@@ -321,6 +291,57 @@ func Gen(db Database, outName string) error {
 	if err != nil {
 		return err
 	}
+	buf.WriteString(modelInterfaceTypeTemp)
+	s, err = genSetLastInsertIDMethod(db)
+	if err != nil {
+		return err
+	}
+	buf.WriteString(s)
+	s, err = genStmtType(db)
+	if err != nil {
+		return err
+	}
+	buf.WriteString(s)
+	s, err = genInsertStmtMethod(db)
+	if err != nil {
+		return err
+	}
+	buf.WriteString(s)
+	s, err = genInsertStmtFunc(db)
+	if err != nil {
+		return err
+	}
+	buf.WriteString(s)
+	s, err = genUpdateStmtMethod(db)
+	if err != nil {
+		return err
+	}
+	buf.WriteString(s)
+	s, err = genUpdateStmtFunc(db)
+	if err != nil {
+		return err
+	}
+	buf.WriteString(s)
+	s, err = genDeleteStmtMethod(db)
+	if err != nil {
+		return err
+	}
+	buf.WriteString(s)
+	s, err = genDeleteStmtFunc(db)
+	if err != nil {
+		return err
+	}
+	buf.WriteString(s)
+	s, err = genModelDistinctMethod(db)
+	if err != nil {
+		return err
+	}
+	buf.WriteString(s)
+	s, err = genModelListDistinctMethod(db)
+	if err != nil {
+		return err
+	}
+	buf.WriteString(s)
 	defer f.Close()
 	n, err := f.Write(buf.Bytes())
 	if err != nil {
