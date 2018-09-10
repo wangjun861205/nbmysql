@@ -1142,3 +1142,53 @@ const modelListSortMethodTemp = `{{ for _, tab in DB.Tables }}
 		}
 	}
 {{ endfor }}`
+
+const modelExistsMethodTemp = `{{ for _, tab in DB.Tables }}
+	func (m *{{ tab.ModelName }}) Exists() (bool, error) {
+		colList, valList := make([]string, 0, 16), make([]string, 0, 16)	
+		{{ for _, col in tab.Columns }}
+			if m.{{ col.FieldName }}.IsValid() {
+				colList = append(colList, {{ col.ColumnName }})
+				if m.{{ col.FieldName }}.IsNull() {
+					valList = append(valList, "NULL")
+				} else {
+					valList = append(valList, m.{{ col.FieldName }}.SQLVal())
+				}
+			}
+		{{ endfor }}
+		whereList := make([]string, len(colList))
+		for i := range colList {
+			whereList[i] = colList[i] + "=" + valList[i]
+		}
+		stmtStr := fmt.Sprintf("SELECT EXISTS(SELECT * FROM {{ tab.TableName }} WHERE %s)", strings.Join(whereList, " and "))
+		row := {{ DB.ObjName }}.QueryRow(stmtStr)
+		var result int
+		err := row.Scan(&result)
+		if err != nil {
+			return false, err
+		}
+		if result == 1 {
+			return true, nil
+		}
+		return false, nil
+	}
+{{ endfor }}`
+
+const existsFuncTemp = `{{ for _, tab in DB.Tables }}
+	func {{ tab.ModelName }}Exists(where string) (bool, error) {
+		for k, v := range {{ tab.ModelName }}Map {
+			where = strings.Replace(where, k, v, -1)
+		}
+		stmtStr := fmt.Sprintf("SELECT EXISTS (SELECT * FROM {{ tab.TableName }} WHERE %s)", where)
+		row := {{ DB.ObjName }}.QueryRow(stmtStr)
+		var result int
+		err := row.Scan(&result)
+		if err != nil {
+			return false, err
+		}
+		if result == 1 {
+			return true, nil
+		}
+		return false, nil
+	}
+{{ endfor }}`

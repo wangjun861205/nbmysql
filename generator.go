@@ -161,6 +161,14 @@ func genModelListSortMethod(db Database) (string, error) {
 	return nbfmt.Fmt(modelListSortMethodTemp, map[string]interface{}{"DB": db})
 }
 
+func genModelExistsMethod(db Database) (string, error) {
+	return nbfmt.Fmt(modelExistsMethodTemp, map[string]interface{}{"DB": db})
+}
+
+func genExistsFunc(db Database) (string, error) {
+	return nbfmt.Fmt(existsFuncTemp, map[string]interface{}{"DB": db})
+}
+
 //Gen generate database definition
 func Gen(db Database, outName string) error {
 	buf := bytes.NewBuffer([]byte{})
@@ -352,6 +360,16 @@ func Gen(db Database, outName string) error {
 	}
 	buf.WriteString(s)
 	s, err = genModelListSortMethod(db)
+	if err != nil {
+		return err
+	}
+	buf.WriteString(s)
+	s, err = genModelExistsMethod(db)
+	if err != nil {
+		return err
+	}
+	buf.WriteString(s)
+	s, err = genExistsFunc(db)
 	if err != nil {
 		return err
 	}
