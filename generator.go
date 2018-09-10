@@ -153,6 +153,14 @@ func genModelListDistinctMethod(db Database) (string, error) {
 	return nbfmt.Fmt(modelListDistinctMethodTemp, map[string]interface{}{"DB": db})
 }
 
+func genModelListSortByMethod(db Database) (string, error) {
+	return nbfmt.Fmt(modelListSortByMethodTemp, map[string]interface{}{"DB": db})
+}
+
+func genModelListSortMethod(db Database) (string, error) {
+	return nbfmt.Fmt(modelListSortMethodTemp, map[string]interface{}{"DB": db})
+}
+
 //Gen generate database definition
 func Gen(db Database, outName string) error {
 	buf := bytes.NewBuffer([]byte{})
@@ -287,10 +295,6 @@ func Gen(db Database, outName string) error {
 		return err
 	}
 	buf.WriteString(s)
-	f, err := os.OpenFile(outName, os.O_CREATE|os.O_WRONLY, 0755)
-	if err != nil {
-		return err
-	}
 	buf.WriteString(modelInterfaceTypeTemp)
 	s, err = genSetLastInsertIDMethod(db)
 	if err != nil {
@@ -342,6 +346,20 @@ func Gen(db Database, outName string) error {
 		return err
 	}
 	buf.WriteString(s)
+	s, err = genModelListSortByMethod(db)
+	if err != nil {
+		return err
+	}
+	buf.WriteString(s)
+	s, err = genModelListSortMethod(db)
+	if err != nil {
+		return err
+	}
+	buf.WriteString(s)
+	f, err := os.OpenFile(outName, os.O_CREATE|os.O_WRONLY, 0755)
+	if err != nil {
+		return err
+	}
 	defer f.Close()
 	n, err := f.Write(buf.Bytes())
 	if err != nil {

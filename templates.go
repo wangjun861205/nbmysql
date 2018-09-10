@@ -404,41 +404,160 @@ const modelCheckMethodTemp = `{{ for _, tab in DB.Tables }}
 	}
 {{ endfor }}`
 
-const modelListTypeTemp = `type modelList interface {
-Len() int
-Swap(i, j int)
-}
-type sortObj struct {
-	list modelList
-	lessFuncs []func(i, j int) int
-}
+// const modelListTypeTemp = `type modelList interface {
+// Len() int
+// Swap(i, j int)
+// }
+// type sortObj struct {
+// 	list modelList
+// 	lessFuncs []func(i, j int) int
+// }
 
-func (so sortObj) Len() int {
-	return so.list.Len()
-}
+// func (so sortObj) Len() int {
+// 	return so.list.Len()
+// }
 
-func (so sortObj) Swap(i, j int) {
-	so.list.Swap(i, j)
-}
+// func (so sortObj) Swap(i, j int) {
+// 	so.list.Swap(i, j)
+// }
 
-func (so sortObj) Less(i, j int) bool {
-	for _, f := range so.lessFuncs {
-		v := f(i, j)
-		switch v {
-		case -1:
-			return true
-		case 0:
-			continue
-		case 1:
-			return false
-		}
-	}
-	return false
-}
+// func (so sortObj) Less(i, j int) bool {
+// 	for _, f := range so.lessFuncs {
+// 		v := f(i, j)
+// 		switch v {
+// 		case -1:
+// 			return true
+// 		case 0:
+// 			continue
+// 		case 1:
+// 			return false
+// 		}
+// 	}
+// 	return false
+// }
 
-type sortFunc func() func(i, j int) int 
+// type sortFunc func() func(i, j int) int
 
-{{ for _, tab in DB.Tables }}
+// {{ for _, tab in DB.Tables }}
+// 	type {{ tab.ModelName }}List []*{{ tab.ModelName }}
+
+// 	func (l {{ tab.ModelName }}List) Len() int {
+// 		return len(l)
+// 	}
+
+// 	func (l {{ tab.ModelName }}List) Swap(i, j int) {
+// 		l[i], l[j] = l[j], l[i]
+// 	}
+
+// 	{{ for _, col in tab.Columns }}
+// 		func (l {{ tab.ModelName }}List) By{{ col.FieldName }}() func(i, j int) int {
+// 			{{ switch col.FieldType }}
+// 				{{ case "string" }}
+// 					f := func(i, j int) int {
+// 						ival, _, _ := l[i].Get{{ col.FieldName }}()
+// 						jval, _, _ := l[j].Get{{ col.FieldName }}()
+// 						switch {
+// 						case ival<jval:
+// 							return -1
+// 						case ival > jval:
+// 							return 1
+// 						default:
+// 							return 0
+// 						}
+// 					}
+// 					return f
+// 				{{ case "int64" }}
+// 					f := func(i, j int) int {
+// 						ival, _, _ := l[i].Get{{ col.FieldName }}()
+// 						jval, _, _ := l[j].Get{{ col.FieldName }}()
+// 						switch {
+// 						case ival<jval:
+// 							return -1
+// 						case ival > jval:
+// 							return 1
+// 						default:
+// 							return 0
+// 						}
+// 					}
+// 					return f
+// 				{{ case "float64" }}
+// 					f := func(i, j int) int {
+// 						ival, _, _ := l[i].Get{{ col.FieldName }}()
+// 						jval, _, _ := l[j].Get{{ col.FieldName }}()
+// 						switch {
+// 						case ival<jval:
+// 							return -1
+// 						case ival > jval:
+// 							return 1
+// 						default:
+// 							return 0
+// 						}
+// 					}
+// 					return f
+// 				{{ case "bool" }}
+// 					f := func(i, j int) int {
+// 						ival, _, _ := l[i].Get{{ col.FieldName }}()
+// 						jval, _, _ := l[j].Get{{ col.FieldName }}()
+// 						var ii, ji int
+// 						if ival {
+// 							ii = 1
+// 						}
+// 						if jval {
+// 							ji = 1
+// 						}
+// 						switch {
+// 						case ii < ji:
+// 							return -1
+// 						case ii > ji:
+// 							return 1
+// 						default:
+// 							return 0
+// 						}
+// 					}
+// 					return f
+// 				{{ case "time.Time" }}
+// 					f := func(i, j int) int {
+// 						ival, _, _ := l[i].Get{{ col.FieldName }}()
+// 						jval, _, _ := l[j].Get{{ col.FieldName }}()
+// 						switch {
+// 						case ival.Before(jval):
+// 							return -1
+// 						case ival.After(jval):
+// 							return 1
+// 						default:
+// 							return 0
+// 						}
+// 					}
+// 					return f
+// 			{{ endswitch }}
+// 		}
+// 	{{ endfor }}
+// 	func (l {{ tab.ModelName }}List) Sort(reverse bool, funcs ...sortFunc) {
+// 		if len(funcs) == 0 {
+// 			return
+// 		}
+// 		so := sortObj{list: l, lessFuncs: make([]func(i, j int) int, len(funcs))}
+// 		for i := range funcs {
+// 			so.lessFuncs[i] = funcs[i]()
+// 		}
+// 		if reverse {
+// 			sort.Sort(sort.Reverse(so))
+// 		} else {
+// 			sort.Sort(so)
+// 		}
+// 	}
+// 	func (l {{ tab.ModelName }}List) Filter(f func(*{{ tab.ModelName }}) bool) {{ tab.ModelName }}List {
+// 		fl := make({{ tab.ModelName }}List, 0, l.Len())
+// 		for _, m := range l {
+// 			if f(m) {
+// 				fl = append(fl, m)
+// 			}
+// 		}
+// 		return fl
+// 	}
+// {{ endfor }}`
+
+const modelListTypeTemp = `{{ for _, tab in DB.Tables }}
 	type {{ tab.ModelName }}List []*{{ tab.ModelName }}
 
 	func (l {{ tab.ModelName }}List) Len() int {
@@ -449,111 +568,32 @@ type sortFunc func() func(i, j int) int
 		l[i], l[j] = l[j], l[i]
 	}
 
-	{{ for _, col in tab.Columns }}
-		func (l {{ tab.ModelName }}List) By{{ col.FieldName }}() func(i, j int) int {
-			{{ switch col.FieldType }}
-				{{ case "string" }}
-					f := func(i, j int) int {
-						ival, _, _ := l[i].Get{{ col.FieldName }}()
-						jval, _, _ := l[j].Get{{ col.FieldName }}()
-						switch {
-						case ival<jval:
-							return -1
-						case ival > jval:
-							return 1
-						default:
-							return 0
-						}
-					}
-					return f
-				{{ case "int64" }}
-					f := func(i, j int) int {
-						ival, _, _ := l[i].Get{{ col.FieldName }}()
-						jval, _, _ := l[j].Get{{ col.FieldName }}()
-						switch {
-						case ival<jval:
-							return -1
-						case ival > jval:
-							return 1
-						default:
-							return 0
-						}
-					}
-					return f
-				{{ case "float64" }}
-					f := func(i, j int) int {
-						ival, _, _ := l[i].Get{{ col.FieldName }}()
-						jval, _, _ := l[j].Get{{ col.FieldName }}()
-						switch {
-						case ival<jval:
-							return -1
-						case ival > jval:
-							return 1
-						default:
-							return 0
-						}
-					}
-					return f
-				{{ case "bool" }}
-					f := func(i, j int) int {
-						ival, _, _ := l[i].Get{{ col.FieldName }}()
-						jval, _, _ := l[j].Get{{ col.FieldName }}()
-						var ii, ji int
-						if ival {
-							ii = 1
-						}
-						if jval {
-							ji = 1
-						}
-						switch {
-						case ii < ji:
-							return -1
-						case ii > ji:
-							return 1
-						default:
-							return 0
-						}
-					}
-					return f
-				{{ case "time.Time" }}
-					f := func(i, j int) int {
-						ival, _, _ := l[i].Get{{ col.FieldName }}()
-						jval, _, _ := l[j].Get{{ col.FieldName }}()
-						switch {
-						case ival.Before(jval):
-							return -1
-						case ival.After(jval):
-							return 1
-						default:
-							return 0
-						}
-					}
-					return f
-			{{ endswitch }}
-		}
-	{{ endfor }}
-	func (l {{ tab.ModelName }}List) Sort(reverse bool, funcs ...sortFunc) {
-		if len(funcs) == 0 {
-			return
-		}
-		so := sortObj{list: l, lessFuncs: make([]func(i, j int) int, len(funcs))}
-		for i := range funcs {
-			so.lessFuncs[i] = funcs[i]()
-		}
-		if reverse {
-			sort.Sort(sort.Reverse(so))
-		} else {
-			sort.Sort(so)
-		}
+	type {{ tab.ArgName }}SortObj struct {
+		list {{ tab.ModelName }}List
+		lessFuncs []func(l {{ tab.ModelName }}List, i, j int) int
 	}
-	func (l {{ tab.ModelName }}List) Filter(f func(*{{ tab.ModelName }}) bool) {{ tab.ModelName }}List {
-		fl := make({{ tab.ModelName }}List, 0, l.Len())
-		for _, m := range l {
-			if f(m) {
-				fl = append(fl, m)
+
+	func (so {{ tab.ArgName }}SortObj) Len() int {
+		return so.list.Len()
+	}
+
+	func (so {{ tab.ArgName }}SortObj) Swap(i, j int) {
+		so.list.Swap(i, j)
+	}
+
+	func (so {{ tab.ArgName }}SortObj) Less(i, j int) bool {
+		for _, f := range so.lessFuncs {
+			v := f(so.list, i, j)
+			switch v {
+			case -1:
+				return true
+			case 0:
+				continue
+			case 1:
+				return false
 			}
 		}
-		return fl
+		return false
 	}
 {{ endfor }}`
 
@@ -1033,5 +1073,72 @@ const modelListDistinctMethodTemp = `{{ for _, tab in DB.Tables }}
 			}
 		}
 		return filteredList
+	}
+{{ endfor }}`
+
+const modelListSortByMethodTemp = `{{ for _, tab in DB.Tables }}
+	{{ for _, col in tab.Columns }}
+		func (l {{ tab.ModelName }}List) SortBy{{ col.FieldName }}(i, j int) int {
+			var iInt, jInt int
+			iVal, iValid, iNull := l[i].{{ col.FieldName }}.Get()
+			jVal, jValid, jNull := l[j].{{ col.FieldName }}.Get()
+			if !iValid || !jValid {
+				if iValid {
+					iInt = 1
+				}
+				if jValid {
+					jInt = 1
+				}
+				return iInt - jInt
+			}
+			if iNull || jNull {
+				if !iNull {
+					iInt = 1
+				}
+				if !jNull {
+					jInt = 1
+				}
+				return iInt - jInt
+			}
+			{{ switch col.FieldType }}
+				{{ case "string", "int64", "float64" }}
+					switch {
+					case iVal < jVal:
+						return -1
+					case iVal > jVal:
+						return 1
+					default:
+						return 0
+					}
+				{{ case "bool" }}
+					if iVal {
+						iInt = 1
+					}
+					if jVal {
+						jInt = 1
+					}
+					return iInt - jInt
+				{{ case "time.Time" }}
+					switch {
+					case iVal.Before(jVal):
+						return -1
+					case iVal.After(jVal):
+						return 1
+					default:
+						return 0
+					}
+			{{ endswitch }}
+		}
+	{{ endfor }}
+{{ endfor }}`
+
+const modelListSortMethodTemp = `{{ for _, tab in DB.Tables }}
+	func (l {{ tab.ModelName }}List) Sort(reverse bool, fs ...func({{ tab.ModelName }}List, int, int) int) {
+		so := {{ tab.ArgName }}SortObj{list: l, lessFuncs: fs}
+		if reverse {
+			sort.Sort(sort.Reverse(so))
+		} else {
+			sort.Sort(so)
+		}
 	}
 {{ endfor }}`
